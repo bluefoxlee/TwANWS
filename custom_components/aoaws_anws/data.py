@@ -65,6 +65,24 @@ class Observation:
         return elements
 
 
+
+import re
+
+def is_rvr_format(part):
+    """判斷是否為 RVR 格式 (例如 R06/1200U)"""
+    return re.match(r'^R\d{2}/\d{4}[UDN]?$', part) is not None
+
+def parse_rvr(part):
+    """解析 RVR 字串"""
+    match = re.match(r'^R(\d{2})/(\d{4})([UDN]?)$', part)
+    if match:
+        return {
+            "runway": match.group(1),
+            "visibility": int(match.group(2)),
+            "trend": match.group(3) if match.group(3) else None
+        }
+    return None
+
 class AnwsAoawseData:
     """Get current AOAWS from ANWS.
 
@@ -162,7 +180,12 @@ class AnwsAoawseData:
                         value = value + 10
                     observation.visibility = Element("W", value=value, units=unit.strip())
                     for k in metar:
-                        if re.search(r"\d+\/\d+", k) and temperature == int(k.split("/")[0]):
+                        if (
+                            re.search(r"\d+/\d+", k)
+                            and not k.startswith("R")
+                            and k.split("/")[0].isdigit()
+                            and temperature == int(k.split("/")[0])
+                        ):
                             observation.dew_point = Element("T", value=k.split("/", 1)[1])
                         if len(k) >= 1 and "Q" == k[0]:
                             observation.pressure = Element("P", value=k[1:])
