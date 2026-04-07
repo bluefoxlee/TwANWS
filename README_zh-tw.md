@@ -5,6 +5,8 @@
 
 這個整合是基於 MetOffice 所做的開發。
 
+本分支整合基於 [tsunglung](https://github.com/tsunglung/TwANWS) 成果所進行的修正。因航空氣象似乎使用者少，不好麻煩，自己藉由 AI 進行小修正，作為自用。
+
 # 安裝
 
 你可以用 [HACS](https://hacs.xyz/) 來安裝這個整合。 步驟如下 custom repo: HACS > Integrations > 3 dots (upper top corner) > Custom repositories > URL: `tsunglung/TwANWS` > Category: Integration
