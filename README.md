@@ -5,6 +5,10 @@ Home Assistant support for [Taiwan ANWS](https://aoaws.anws.gov.tw/AWS/index.php
 
 This integration is based on MetOffice to develop.
 
+This integration is forked from [tsunglung](https://github.com/tsunglung/TwANWS)'s excellent work.
+
+As aviation weather integrations are relatively niche, I maintain this fork with a few minor modifications tailored to my personal use, with some assistance from AI.
+
 ## Install
 
 You can install component with [HACS](https://hacs.xyz/) custom repo: HACS > Integrations > 3 dots (upper top corner) > Custom repositories > URL: `tsunglung/TwANWS` > Category: Integration
