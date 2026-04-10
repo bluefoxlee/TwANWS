@@ -100,7 +100,12 @@ class AnwsAoawseData:
         return self._convert_to_observations(site, data)
 
     def _convert_to_observation(self, site, data):
-        """ converter  """
+        rvr_list = []   # 👈 加這一行
+
+        for i in data:
+            for j in i:
+                """ converter  """
+                pass
         observation = Observation()
         for i in data:
             for j in i:
@@ -142,14 +147,54 @@ class AnwsAoawseData:
                     value = int(j.get("VIS", "0")) / 1000
                     observation.visibility = Element("W", value=value, units=UnitOfLength.KILOMETERS)
 
+                    # =========================
+                    # 🔥 用 RVR 覆蓋 VIS
+                    # =========================
+                    if rvr_list:
+                        min_rvr = min(rvr_list) / 1000.0
+                        observation.visibility = Element(
+                            "W",
+                            value=min_rvr,
+                            units=UnitOfLength.KILOMETERS
+                        )
+
                     # cloud ceiling
                     value = j.get("CEILING", "")
                     observation.cloud_ceiling  = Element("W", value=value)
 
+                    rvr_list = []
+
                     for k in j.get("REPORT", "").split():
-                        if re.search(r"\d+\/\d+", k) and temperature == int(k.split("/")[0]):
+
+                        # =========================
+                        # 🔥 RVR 處理
+                        # =========================
+                        if k.startswith("R") and "/" in k:
+                            try:
+                                vis_part = k.split("/")[1]
+                                match = re.search(r"\d{3,4}", vis_part)
+                                if match:
+                                    vis = int(match.group())
+                                    rvr_list.append(vis)
+                            except Exception as e:
+                                _LOGGER.debug(f"RVR parse failed: {k} ({e})")
+                            continue
+
+                        # =========================
+                        # dew point（避免 Rxx）
+                        # =========================
+                        if (
+                            "/" in k
+                            and not k.startswith("R")
+                            and k.split("/")[0].isdigit()
+                            and temperature == int(k.split("/")[0])
+                        ):
                             observation.dew_point = Element("T", value=k.split("/", 1)[1])
-                        if len(k) >= 1 and "Q" == k[0]:
+
+                        # =========================
+                        # pressure
+                        # =========================
+                        if len(k) >= 1 and k.startswith("Q"):
                             observation.pressure = Element("P", value=k[1:])
 
         return observation
