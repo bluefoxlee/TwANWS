@@ -1,6 +1,6 @@
 <a href="https://www.buymeacoffee.com/tsunglung" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="30" width="120"></a>
 
-Home Assistant support for [Taiwan ANWS](https://aoaws.anws.gov.tw/AWS/index.php). [The readme in Traditional Chinese](https://github.com/tsunglung/TwANWS/blob/master/README_zh-tw.md).
+Home Assistant support for [Taiwan ANWS](https://aoaws.anws.gov.tw/AWS/index.php). [The readme in Traditional Chinese](https://github.com/bluefoxlee/TwANWS/blob/master/README_zh-tw.md).
 
 
 This integration is based on MetOffice to develop.
