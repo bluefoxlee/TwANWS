@@ -100,12 +100,6 @@ class AnwsAoawseData:
         return self._convert_to_observations(site, data)
 
     def _convert_to_observation(self, site, data):
-        rvr_list = []   # 👈 加這一行
-
-        for i in data:
-            for j in i:
-                """ converter  """
-                pass
         observation = Observation()
         for i in data:
             for j in i:
@@ -143,32 +137,14 @@ class AnwsAoawseData:
                     value = int(j.get("WDIR", "0"))
                     observation.wind_direction = Element("W", value=value)
 
-                    # visibility
-                    value = int(j.get("VIS", "0")) / 1000
-                    observation.visibility = Element("W", value=value, units=UnitOfLength.KILOMETERS)
-
                     # =========================
-                    # 🔥 用 RVR 覆蓋 VIS
+                    # REPORT parsing（先做）
                     # =========================
-                    if rvr_list:
-                        min_rvr = min(rvr_list) / 1000.0
-                        observation.visibility = Element(
-                            "W",
-                            value=min_rvr,
-                            units=UnitOfLength.KILOMETERS
-                        )
-
-                    # cloud ceiling
-                    value = j.get("CEILING", "")
-                    observation.cloud_ceiling  = Element("W", value=value)
-
                     rvr_list = []
 
                     for k in j.get("REPORT", "").split():
 
-                        # =========================
-                        # 🔥 RVR 處理
-                        # =========================
+                        # RVR，例如 R24/800M / R06/1600U
                         if k.startswith("R") and "/" in k:
                             try:
                                 vis_part = k.split("/")[1]
@@ -180,9 +156,7 @@ class AnwsAoawseData:
                                 _LOGGER.debug(f"RVR parse failed: {k} ({e})")
                             continue
 
-                        # =========================
-                        # dew point（避免 Rxx）
-                        # =========================
+                        # dew point，例如 25/25
                         if (
                             "/" in k
                             and not k.startswith("R")
@@ -191,11 +165,27 @@ class AnwsAoawseData:
                         ):
                             observation.dew_point = Element("T", value=k.split("/", 1)[1])
 
-                        # =========================
-                        # pressure
-                        # =========================
-                        if len(k) >= 1 and k.startswith("Q"):
+                        # pressure，例如 Q1013
+                        if k.startswith("Q"):
                             observation.pressure = Element("P", value=k[1:])
+
+                    # =========================
+                    # visibility（最後才決定）
+                    # =========================
+                    value = int(j.get("VIS", "0")) / 1000
+
+                    if rvr_list:
+                        value = min(rvr_list) / 1000.0
+
+                    observation.visibility = Element(
+                        "W",
+                        value=value,
+                        units=UnitOfLength.KILOMETERS
+                    )
+
+                    # cloud ceiling
+                    value = j.get("CEILING", "")
+                    observation.cloud_ceiling  = Element("W", value=value)
 
         return observation
 
@@ -310,18 +300,32 @@ class AnwsAoawseData:
 
     def _update(self):
         """Get the latest data from AOAWS."""
-        if self.site_name is None:
-            _LOGGER.error("No ANWS AOAWS observations site held, check logs for problems")
-            return
+
+        _LOGGER.debug("ANWS update triggered")
 
         try:
+            # 👉 每次都先嘗試更新資料（避免卡死）
             self._update_site()
-            self.now = self.get_observation_for_site(
+
+            if self.site_name is None:
+                _LOGGER.warning("No ANWS AOAWS observations site held after update")
+                return
+
+            # 👉 只在成功時更新資料（避免清空）
+            observation = self.get_observation_for_site(
                 self._site, self.data
             )
-            self.forecast = self.get_observations_for_site(
+
+            if observation is not None:
+                self.now = observation
+
+            forecast = self.get_observations_for_site(
                 self._site, self.data
             )
-        except (ValueError) as err:
-            _LOGGER.error("Check ANWS AOAWS connection: %s", err.args)
-            self.now = None
+
+            if forecast is not None:
+                self.forecast = forecast
+
+        except Exception as e:
+            _LOGGER.warning(f"ANWS update failed: {e}")
+            return
