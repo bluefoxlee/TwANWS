@@ -57,6 +57,10 @@ _load_module(
     f"{PACKAGE}.metar",
     ROOT / "custom_components" / "aoaws_anws" / "metar.py",
 )
+_load_module(
+    f"{PACKAGE}.localization",
+    ROOT / "custom_components" / "aoaws_anws" / "localization.py",
+)
 data_module = _load_module(
     f"{PACKAGE}.data",
     ROOT / "custom_components" / "aoaws_anws" / "data.py",
@@ -102,6 +106,19 @@ class DataConversionTests(unittest.TestCase):
         self.assertEqual(
             [(group.runway, group.lower_metres) for group in observation.rvr_groups],
             [("R24", 800), ("R24", 500), ("R06", 600)],
+        )
+
+    def test_weather_text_uses_configured_language(self):
+        english_client = data_module.AnwsAoawseData(None, "Kinmen", "en")
+        english = english_client._convert_to_observation(
+            "Kinmen", [[_record()]]
+        )
+
+        self.assertEqual(english.weather.value, "Fog")
+        self.assertEqual(english.weather.text, "Fog")
+        self.assertEqual(
+            self.client._convert_to_observation("Kinmen", [[_record()]]).weather.text,
+            "霧",
         )
 
     def test_calm_wind(self):

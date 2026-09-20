@@ -24,6 +24,7 @@ from .const import (
     CONDITION_CLASSES,
     DEFAULT_NAME,
     DOMAIN,
+    ATTR_WEATHER_TEXT,
     ANWS_AOAWS_COORDINATOR,
     ANWS_AOAWS_DATA,
     ANWS_AOAWS_NAME,
@@ -211,6 +212,13 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
     def attribution(self):
         """Return the attribution."""
         return ATTRIBUTION
+
+    @property
+    def extra_state_attributes(self):
+        """Return localized weather text without changing the HA condition."""
+        if self.anws_aoaws_now and self.anws_aoaws_now.weather:
+            return {ATTR_WEATHER_TEXT: self.anws_aoaws_now.weather.text}
+        return {}
 
     async def async_added_to_hass(self) -> None:
         """Set up a listener and load data."""

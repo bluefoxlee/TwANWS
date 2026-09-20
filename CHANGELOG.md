@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.12
+
+### Added
+
+- Localize visibility labels for the configured language while preserving the
+  numeric visibility distance and a stable English `visibility_level` attribute.
+- Expose configured-language weather text on both the weather sensor and the
+  standard weather entity.
+
+### Compatibility
+
+- Keep Home Assistant condition values such as `rainy` and
+  `lightning-rainy` unchanged so icons, automations, and weather cards remain
+  compatible.
+
 ## 1.0.11
 
 ### Added

@@ -36,6 +36,7 @@
 - 支援 METAR／SPECI 的 `BECMG`、`TEMPO`、`NOSIG`、`AUTO`、`COR` 與 `NIL` 群組。
 - ANWS JSON 欄位缺失或無效時，可回退使用 METAR 溫度、風組與能見度資料。
 - 依 METAR 雲層群組補足雲量百分比與雲底高度；支援 `CAVOK`、`NSC`、`NCD` 與複合降水現象。
+- 能見度分類與天氣文字依整合設定的繁中／英文顯示；標準天氣狀態代碼保持不變。
 - API 或機場夜間暫停資料時保留最後有效觀測，下次五分鐘輪詢會自動重試。
 - 改用 Home Assistant 的 `native_*` weather / sensor 數值與單位介面。
 

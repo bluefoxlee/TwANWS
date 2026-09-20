@@ -17,8 +17,8 @@ from .const import (
     ANWS_AOAWS_DATA,
     ANWS_AOAWS_NAME,
     SENSOR_TYPES,
-    VISIBILITY_CLASSES
 )
+from .localization import localized_visibility_label, visibility_level
 
 
 async def async_setup_entry(
@@ -74,11 +74,7 @@ class AnwsAoawsCurrentSensor(SensorEntity):
 
         if self._type == "visibility" and hasattr(self.anws_aoaws_now, "visibility"):
             _visibility = self.anws_aoaws_now.visibility.value
-            value = "Very Poor"
-            for k, v in VISIBILITY_CLASSES.items():
-                if _visibility <= v:
-                    value = k
-                    break
+            value = localized_visibility_label(_visibility, self._data.language)
 
         elif self._type == "weather" and hasattr(self.anws_aoaws_now, self._type):
             for k, v in CONDITION_CLASSES.items():
@@ -133,6 +129,14 @@ class AnwsAoawsCurrentSensor(SensorEntity):
             and self.anws_aoaws_now.weather
         ):
             attr[ATTR_WEATHER_TEXT] = self.anws_aoaws_now.weather.text
+        if (
+            self._type == "visibility"
+            and self.anws_aoaws_now
+            and self.anws_aoaws_now.visibility
+        ):
+            attr["visibility_level"] = visibility_level(
+                self.anws_aoaws_now.visibility.value
+            )
 
         return attr
 

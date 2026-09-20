@@ -29,6 +29,7 @@ from .metar import (
     parse_visibility,
     parse_wind,
 )
+from .localization import localized_weather_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -176,9 +177,7 @@ class AnwsAoawseData:
             for character in str(weather.get("EName", ""))
             if character.isalpha() or character.isspace()
         ).strip()
-        weather_text = (
-            weather.get("CName") if self.language == "tw" else weather.get("EName")
-        )
+        weather_text = localized_weather_text(weather, self.language)
         observation.weather = Element(
             "W", value=weather_en, text=weather_text or weather_en
         )
