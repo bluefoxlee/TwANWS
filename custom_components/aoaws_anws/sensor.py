@@ -64,8 +64,8 @@ class AnwsAoawsCurrentSensor(SensorEntity):
         return self._unique_id
 
     @property
-    def state(self):
-        """Return the state of the sensor."""
+    def native_value(self):
+        """Return the native value of the sensor."""
         value = None
         if self._type == "visibility_distance" and hasattr(
             self.anws_aoaws_now, "visibility"
@@ -95,8 +95,8 @@ class AnwsAoawsCurrentSensor(SensorEntity):
         return value
 
     @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement."""
+    def native_unit_of_measurement(self):
+        """Return the native unit of measurement."""
         return SENSOR_TYPES[self._type][2]
 
     @property
@@ -104,7 +104,7 @@ class AnwsAoawsCurrentSensor(SensorEntity):
         """Return the icon for the entity card."""
         value = SENSOR_TYPES[self._type][3]
         if self._type == "weather":
-            value = self.state
+            value = self.native_value
             if value is None:
                 value = "sunny"
             elif value == "partlycloudy":
@@ -127,7 +127,11 @@ class AnwsAoawsCurrentSensor(SensorEntity):
             ATTR_SENSOR_ID: self._type,
             ATTR_SITE_NAME: self.anws_aoaws_site_name if self.anws_aoaws_site_name else None,
         }
-        if self._type == "weather":
+        if (
+            self._type == "weather"
+            and self.anws_aoaws_now
+            and self.anws_aoaws_now.weather
+        ):
             attr[ATTR_WEATHER_TEXT] = self.anws_aoaws_now.weather.text
 
         return attr

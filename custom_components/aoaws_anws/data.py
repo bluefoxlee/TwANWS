@@ -1,23 +1,33 @@
 """Common ANWS AOAWS Data class used by both sensor and entity."""
 
 import logging
-import re
-import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
+
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
-from bs4 import BeautifulSoup
 from homeassistant.const import (
     UnitOfLength,
+    UnitOfSpeed,
     UnitOfTemperature,
-    UnitOfSpeed
 )
 from .const import (
     BASE_URL,
     HA_USER_AGENT,
-    REQUEST_TIMEOUT
+    REQUEST_TIMEOUT,
+)
+from .metar import (
+    parse_dew_point,
+    parse_clouds,
+    parse_present_weather,
+    parse_pressure,
+    parse_report_header,
+    parse_rvr,
+    parse_temperature,
+    parse_trends,
+    parse_visibility,
+    parse_wind,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,6 +56,12 @@ class Observation:
         self.wind_speed = None
         self.wind_direction = None
         self.wind_gust = None
+        self.wind_report = None
+        self.wind_variable_from = None
+        self.wind_variable_to = None
+        self.report_visibility = None
+        self.weather_codes = []
+        self.cloud_groups = []
         self.visibility = None
         self.uv = None
         self.precipitation = None
@@ -55,6 +71,12 @@ class Observation:
         self.dew_point = None
         self.cloud_coverage = None
         self.cloud_ceiling = None
+        self.raw_report = None
+        self.report_header = None
+        self.trends = []
+        self.rvr_groups = []
+        self.prevailing_visibility = None
+        self.rvr_min = None
 
     def __iter__(self):
         for attr, value in self.__dict__.items():
@@ -100,174 +122,186 @@ class AnwsAoawseData:
         return self._convert_to_observations(site, data)
 
     def _convert_to_observation(self, site, data):
-        rvr_list = []   # 👈 加這一行
-
-        for i in data:
-            for j in i:
-                """ converter  """
-                pass
-        observation = Observation()
-        for i in data:
-            for j in i:
-                if self._site == j["location_en"]:
-                    # date
-                    obs_datetime = datetime.strptime(
-                        j["datatime"].strip(), "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
-                    timestamp = int(time.mktime((obs_datetime).timetuple()))
-
-                    observation.date = datetime.fromtimestamp(
-                        timestamp).strftime('%Y-%m-%d %H:%M:%S')
-
-                    # wether
-                    value = ''.join(c for c in j["WEATHER"]["EName"] if c.isalpha() or c.isspace()).strip()
-                    observation.weather = Element("W", value=value)
-
-                    # temperature
-                    value = int(j.get("TEMP", "0"))
-                    unit = UnitOfTemperature.CELSIUS
-                    temperature = value
-                    observation.temperature = Element("T", value=value, units=unit.strip())
-
-                    # wind speed
-                    report_text = j.get("REPORT", "")
-                    value = int(j.get("WDSD", "0"))
-                    if "00000KT" in report_text or "CALM" in report_text.upper() or "靜風" in report_text:
-                        value = 0
-                    if "浬/時" in j["WDSD_UNIT"] or "KT" in j["WDSD_UNIT"]:
-                        unit = UnitOfSpeed.KNOTS
-                    else:
-                        unit = UnitOfSpeed.KILOMETERS_PER_HOUR
-                    observation.wind_speed = Element("W", value=value, units=unit)
-
-                    # wind direction
-                    value = int(j.get("WDIR", "0"))
-                    observation.wind_direction = Element("W", value=value)
-
-                    # visibility
-                    value = int(j.get("VIS", "0")) / 1000
-                    observation.visibility = Element("W", value=value, units=UnitOfLength.KILOMETERS)
-
-                    # =========================
-                    # 🔥 用 RVR 覆蓋 VIS
-                    # =========================
-                    if rvr_list:
-                        min_rvr = min(rvr_list) / 1000.0
-                        observation.visibility = Element(
-                            "W",
-                            value=min_rvr,
-                            units=UnitOfLength.KILOMETERS
-                        )
-
-                    # cloud ceiling
-                    value = j.get("CEILING", "")
-                    observation.cloud_ceiling  = Element("W", value=value)
-
-                    rvr_list = []
-
-                    for k in j.get("REPORT", "").split():
-
-                        # =========================
-                        # 🔥 RVR 處理
-                        # =========================
-                        if k.startswith("R") and "/" in k:
-                            try:
-                                vis_part = k.split("/")[1]
-                                match = re.search(r"\d{3,4}", vis_part)
-                                if match:
-                                    vis = int(match.group())
-                                    rvr_list.append(vis)
-                            except Exception as e:
-                                _LOGGER.debug(f"RVR parse failed: {k} ({e})")
-                            continue
-
-                        # =========================
-                        # dew point（避免 Rxx）
-                        # =========================
-                        if (
-                            "/" in k
-                            and not k.startswith("R")
-                            and k.split("/")[0].isdigit()
-                            and temperature == int(k.split("/")[0])
-                        ):
-                            observation.dew_point = Element("T", value=k.split("/", 1)[1])
-
-                        # =========================
-                        # pressure
-                        # =========================
-                        if len(k) >= 1 and k.startswith("Q"):
-                            observation.pressure = Element("P", value=k[1:])
-
-        return observation
+        """Convert the newest valid record for a site to an observation."""
+        records = list(self._site_records(site, data))
+        for record in reversed(records):
+            try:
+                return self._record_to_observation(record, use_rvr=True)
+            except (KeyError, TypeError, ValueError) as err:
+                _LOGGER.warning(
+                    "Skipping invalid current observation for %s: %s", site, err
+                )
+        return None
 
     def _convert_to_observations(self, site, data):
-        """ converter  """
+        """Convert all valid records for a site to observations."""
         observations = []
-        for i in data:
-            for j in i:
-                if self._site == j["location_en"]:
-                    observation = Observation()
-                    # date
-                    timestamp = int(time.mktime((datetime.strptime(
-                        j["datatime"].strip(), "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)).timetuple()))
-
-                    observation.date = datetime.fromtimestamp(
-                        timestamp).strftime('%Y-%m-%d %H:%M:%S')
-
-                    # wether
-                    value = ''.join(c for c in j["WEATHER"]["EName"] if c.isalpha() or c.isspace()).strip()
-                    observation.weather = Element("W", value=value)
-
-                    # temperature
-                    value = int(j.get("TEMP", "-1"))
-                    unit = UnitOfTemperature.CELSIUS
-                    temperature = value
-                    observation.temperature = Element("T", value=value, units=unit.strip())
-
-                    # wind speed
-                    report_text = j.get("REPORT", "")
-                    value = int(j.get("WDSD", "-1"))
-                    if "00000KT" in report_text or "CALM" in report_text.upper() or "靜風" in report_text:
-                        value = 0
-                    if "浬/時" in j["WDSD_UNIT"] or "KT" in j["WDSD_UNIT"]:
-                        unit = UnitOfSpeed.KNOTS
-                    else:
-                        unit = UnitOfSpeed.KILOMETERS_PER_HOUR
-                    observation.wind_speed = Element("W", value=value, units=unit)
-
-                    # wind direction
-                    value = int(j.get("WDIR", "-1"))
-                    observation.wind_direction = Element("W", value=value)
-
-                    # visibility
-                    value = int(j.get("VIS", "-1"))
-                    observation.visibility = Element("W", value=value)
-
-                    # cloud ceiling
-                    value = j.get("CEILING", "")
-                    observation.cloud_ceiling  = Element("W", value=value)
-
-                    observations.append(observation)
-
+        for record in self._site_records(site, data):
+            try:
+                observations.append(
+                    self._record_to_observation(record, use_rvr=False)
+                )
+            except (KeyError, TypeError, ValueError) as err:
+                _LOGGER.warning(
+                    "Skipping invalid observation for %s: %s", site, err
+                )
         return observations
+
+    @staticmethod
+    def _site_records(site, data):
+        """Yield records belonging to a site from the nested ANWS response."""
+        if not isinstance(data, list):
+            return
+        for group in data:
+            if not isinstance(group, list):
+                continue
+            for record in group:
+                if isinstance(record, dict) and record.get("location_en") == site:
+                    yield record
+
+    def _record_to_observation(self, record, use_rvr):
+        """Convert one ANWS JSON record to an Observation."""
+        observation = Observation()
+
+        obs_datetime = datetime.strptime(
+            record["datatime"].strip(), "%Y-%m-%dT%H:%M:%SZ"
+        ).replace(tzinfo=timezone.utc)
+        observation.date = obs_datetime.astimezone(
+            timezone(timedelta(hours=8))
+        ).strftime("%Y-%m-%d %H:%M:%S")
+
+        weather = record.get("WEATHER") or {}
+        weather_en = "".join(
+            character
+            for character in str(weather.get("EName", ""))
+            if character.isalpha() or character.isspace()
+        ).strip()
+        weather_text = (
+            weather.get("CName") if self.language == "tw" else weather.get("EName")
+        )
+        observation.weather = Element(
+            "W", value=weather_en, text=weather_text or weather_en
+        )
+
+        report = str(record.get("REPORT") or "")
+        try:
+            temperature = int(record["TEMP"])
+        except (KeyError, TypeError, ValueError):
+            temperature_group = parse_temperature(report)
+            if temperature_group is None:
+                raise
+            temperature = temperature_group.temperature
+        observation.temperature = Element(
+            "T", value=temperature, units=UnitOfTemperature.CELSIUS
+        )
+
+        observation.raw_report = report
+        observation.report_header = parse_report_header(report)
+        if observation.report_header and observation.report_header.nil:
+            raise ValueError("METAR/SPECI report is NIL")
+        observation.trends = parse_trends(report)
+        observation.rvr_groups = parse_rvr(report)
+        observation.wind_report = parse_wind(report)
+        observation.report_visibility = parse_visibility(report)
+        observation.weather_codes = parse_present_weather(report)
+        observation.cloud_groups = parse_clouds(report)
+        if observation.wind_report is not None:
+            observation.wind_variable_from = observation.wind_report.variable_from
+            observation.wind_variable_to = observation.wind_report.variable_to
+        try:
+            wind_speed = int(record.get("WDSD", 0))
+        except (TypeError, ValueError):
+            wind_speed = (
+                observation.wind_report.speed
+                if observation.wind_report is not None
+                else 0
+            )
+        if "00000KT" in report or "CALM" in report.upper() or "靜風" in report:
+            wind_speed = 0
+        wind_unit = str(record.get("WDSD_UNIT") or "")
+        wind_unit_upper = wind_unit.upper()
+        if "浬/時" in wind_unit or "KT" in wind_unit_upper:
+            unit = UnitOfSpeed.KNOTS
+        elif "MPS" in wind_unit_upper or "M/S" in wind_unit_upper:
+            unit = UnitOfSpeed.METERS_PER_SECOND
+        elif observation.wind_report and observation.wind_report.unit == "MPS":
+            unit = UnitOfSpeed.METERS_PER_SECOND
+        else:
+            unit = UnitOfSpeed.KILOMETERS_PER_HOUR
+        observation.wind_speed = Element("W", value=wind_speed, units=unit)
+
+        if observation.wind_report and observation.wind_report.gust is not None:
+            gust_unit = (
+                UnitOfSpeed.KNOTS
+                if observation.wind_report.unit == "KT"
+                else UnitOfSpeed.METERS_PER_SECOND
+            )
+            observation.wind_gust = Element(
+                "WG", value=observation.wind_report.gust, units=gust_unit
+            )
+
+        try:
+            wind_direction = int(record.get("WDIR", 0))
+        except (TypeError, ValueError):
+            wind_direction = (
+                observation.wind_report.direction
+                if observation.wind_report is not None
+                else None
+            )
+        if observation.wind_report and observation.wind_report.direction is None:
+            wind_direction = None
+        observation.wind_direction = Element("W", value=wind_direction)
+
+        dew_point = parse_dew_point(report, temperature)
+        if dew_point is not None:
+            observation.dew_point = Element(
+                "T", value=dew_point, units=UnitOfTemperature.CELSIUS
+            )
+
+        pressure = parse_pressure(report)
+        if pressure is not None:
+            observation.pressure = Element("P", value=pressure)
+
+        visibility_metres = int(record.get("VIS", 0))
+        prevailing_visibility_km = (
+            10.0 if visibility_metres >= 9999 else visibility_metres / 1000
+        )
+        observation.prevailing_visibility = Element(
+            "VIS", value=prevailing_visibility_km, units=UnitOfLength.KILOMETERS
+        )
+
+        rvr_values = [group.lower_metres for group in observation.rvr_groups]
+        visibility_km = prevailing_visibility_km
+        if rvr_values:
+            rvr_min_km = min(rvr_values) / 1000
+            observation.rvr_min = Element(
+                "RVR", value=rvr_min_km, units=UnitOfLength.KILOMETERS
+            )
+            if use_rvr:
+                visibility_km = rvr_min_km
+        observation.visibility = Element(
+            "W", value=visibility_km, units=UnitOfLength.KILOMETERS
+        )
+
+        observation.cloud_ceiling = Element(
+            "W", value=record.get("CEILING", "")
+        )
+        return observation
 
 
     def _parser_json(self, data):
         if "airport_list" not in data:
-            _LOGGER.error(f"There is no airport_list")
-            return {}
+            _LOGGER.error("There is no airport_list")
+            return []
         if "Taiwan" not in data["airport_list"]:
-            _LOGGER.error(f"There is no Taiwan in airport_list")
-            return {}
-        new_data = []
-        #for i in data["airport_list"]["Taiwan"]:
-        #    datatime = i["datatime"]
-        #    location_en = i["location_en"]
+            _LOGGER.error("There is no Taiwan in airport_list")
+            return []
 
         return data["airport_list"]["Taiwan"]
 
 
     def _update_site(self):
-        """Return the nearest DataPoint Site to the held latitude/longitude."""
+        """Fetch data and return whether the configured site is present."""
 
         # Suppress the InsecureRequestWarning
         requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -284,25 +318,31 @@ class AnwsAoawseData:
                 timeout=REQUEST_TIMEOUT,
                 verify=False)
 
-        except requests.exceptions.RequestException:
-            _LOGGER.error("Failed fetching data for %s", self.site_name)
-            return
+        except requests.exceptions.RequestException as err:
+            _LOGGER.warning("Failed fetching data for %s: %s", self._site, err)
+            return False
 
-        if response.status_code == HTTPStatus.OK:
-            try:
-                self.data = self._parser_json(response.json())
-                for i in self.data:
-                    for j in i:
-                        if self._site == j["location_en"]:
-                            self.site_name = self._site
-            except Exception as e:
-                _LOGGER.error(f"Received data error {e}")
-        else:
-            _LOGGER.error("Received error from ANWS AOAWS: %s", self.site_name)
-            self.site_name = None
-            self.now = None
+        if response.status_code != HTTPStatus.OK:
+            _LOGGER.warning(
+                "Received HTTP %s from ANWS AOAWS for %s",
+                response.status_code,
+                self._site,
+            )
+            return False
 
-        return self._site
+        try:
+            new_data = self._parser_json(response.json())
+        except (TypeError, ValueError) as err:
+            _LOGGER.warning("Received invalid ANWS AOAWS data: %s", err)
+            return False
+
+        if not any(self._site_records(self._site, new_data)):
+            _LOGGER.warning("ANWS AOAWS response has no data for %s", self._site)
+            return False
+
+        self.data = new_data
+        self.site_name = self._site
+        return True
 
     async def async_update(self):
         """Async wrapper for update method."""
@@ -310,18 +350,21 @@ class AnwsAoawseData:
 
     def _update(self):
         """Get the latest data from AOAWS."""
-        if self.site_name is None:
-            _LOGGER.error("No ANWS AOAWS observations site held, check logs for problems")
-            return
+        _LOGGER.debug("ANWS update triggered for %s", self._site)
 
         try:
-            self._update_site()
-            self.now = self.get_observation_for_site(
-                self._site, self.data
-            )
-            self.forecast = self.get_observations_for_site(
-                self._site, self.data
-            )
-        except (ValueError) as err:
-            _LOGGER.error("Check ANWS AOAWS connection: %s", err.args)
-            self.now = None
+            if not self._update_site():
+                return
+
+            observation = self.get_observation_for_site(self._site, self.data)
+            if observation is None:
+                _LOGGER.warning("No valid current observation for %s", self._site)
+                return
+
+            forecast = self.get_observations_for_site(self._site, self.data)
+            self.now = observation
+            if forecast:
+                self.forecast = forecast
+        except (KeyError, TypeError, ValueError) as err:
+            # Keep the last valid values; the next coordinator poll retries.
+            _LOGGER.warning("ANWS AOAWS update failed for %s: %s", self._site, err)
