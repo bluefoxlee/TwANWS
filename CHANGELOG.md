@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.14
+
+### Added
+
+- Distinguish `last_update` (last successful integration update) from
+  `observation_time` (the station report observation time).
+- Keep both timestamps available on sensor and weather entity attributes using
+  timezone-aware ISO 8601 values.
+
 ## 1.0.13
 
 ### Fixed

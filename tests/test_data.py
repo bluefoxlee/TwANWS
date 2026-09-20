@@ -141,14 +141,17 @@ class DataConversionTests(unittest.TestCase):
     def test_failed_refresh_keeps_last_valid_values(self):
         previous_now = object()
         previous_forecast = [object()]
+        previous_update = "2026-04-13T09:00:00+08:00"
         self.client.now = previous_now
         self.client.forecast = previous_forecast
+        self.client.last_update = previous_update
         self.client._update_site = lambda: False
 
         self.client._update()
 
         self.assertIs(self.client.now, previous_now)
         self.assertIs(self.client.forecast, previous_forecast)
+        self.assertEqual(self.client.last_update, previous_update)
 
     def test_successful_refresh_replaces_values(self):
         self.client.data = [[_record()]]
@@ -158,6 +161,8 @@ class DataConversionTests(unittest.TestCase):
 
         self.assertEqual(self.client.now.visibility.value, 0.5)
         self.assertTrue(self.client.forecast)
+        self.assertIsNotNone(self.client.last_update)
+        self.assertIn("T", self.client.last_update)
 
     def test_observation_keeps_raw_report_and_trends(self):
         report = (
@@ -197,6 +202,10 @@ class DataConversionTests(unittest.TestCase):
         )
 
         self.assertEqual(observation.date, "2026-04-13 09:46:00")
+        self.assertEqual(
+            observation.observation_time,
+            "2026-04-13T09:46:00+08:00",
+        )
 
     def test_temperature_falls_back_to_metar_when_api_value_is_missing(self):
         report = "METAR RCBS 131200Z 18005KT 9999 M02/M08 Q1011="

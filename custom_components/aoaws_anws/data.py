@@ -74,6 +74,7 @@ class Observation:
         self.cloud_ceiling = None
         self.raw_report = None
         self.report_header = None
+        self.observation_time = None
         self.trends = []
         self.rvr_groups = []
         self.prevailing_visibility = None
@@ -108,6 +109,7 @@ class AnwsAoawseData:
         self.language = language
         self.now = None
         self.forecast = None
+        self.last_update = None
         self.uri = BASE_URL
 
     async def async_update_site(self):
@@ -170,6 +172,9 @@ class AnwsAoawseData:
         observation.date = obs_datetime.astimezone(
             timezone(timedelta(hours=8))
         ).strftime("%Y-%m-%d %H:%M:%S")
+        observation.observation_time = obs_datetime.astimezone(
+            timezone(timedelta(hours=8))
+        ).isoformat(timespec="seconds")
 
         weather = record.get("WEATHER") or {}
         weather_en = "".join(
@@ -403,6 +408,9 @@ class AnwsAoawseData:
             self.now = observation
             if forecast:
                 self.forecast = forecast
+            self.last_update = datetime.now(
+                timezone(timedelta(hours=8))
+            ).isoformat(timespec="seconds")
         except (KeyError, TypeError, ValueError) as err:
             # Keep the last valid values; the next coordinator poll retries.
             _LOGGER.warning("ANWS AOAWS update failed for %s: %s", self._site, err)

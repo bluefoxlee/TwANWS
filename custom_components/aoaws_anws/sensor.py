@@ -8,6 +8,7 @@ from . import device_info
 from .const import (
     ATTRIBUTION,
     ATTR_LAST_UPDATE,
+    ATTR_OBSERVATION_TIME,
     ATTR_SENSOR_ID,
     ATTR_SITE_NAME,
     ATTR_WEATHER_TEXT,
@@ -131,7 +132,12 @@ class AnwsAoawsCurrentSensor(SensorEntity):
         """Return the state attributes of the device."""
         attr =  {
             ATTR_ATTRIBUTION: ATTRIBUTION,
-            ATTR_LAST_UPDATE: self.anws_aoaws_now.date if self.anws_aoaws_now else None,
+            ATTR_LAST_UPDATE: self._data.last_update,
+            ATTR_OBSERVATION_TIME: (
+                self.anws_aoaws_now.observation_time
+                if self.anws_aoaws_now
+                else None
+            ),
             ATTR_SENSOR_ID: self._type,
             ATTR_SITE_NAME: self.anws_aoaws_site_name if self.anws_aoaws_site_name else None,
         }
