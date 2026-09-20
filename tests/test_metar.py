@@ -16,8 +16,10 @@ SPEC.loader.exec_module(METAR)
 
 current_report_tokens = METAR.current_report_tokens
 parse_dew_point = METAR.parse_dew_point
+parse_altimeter_inches = METAR.parse_altimeter_inches
 parse_clouds = METAR.parse_clouds
 parse_pressure = METAR.parse_pressure
+parse_rmk_tokens = METAR.parse_rmk_tokens
 parse_present_weather = METAR.parse_present_weather
 parse_rvr = METAR.parse_rvr
 parse_rvr_metres = METAR.parse_rvr_metres
@@ -26,6 +28,7 @@ parse_temperature = METAR.parse_temperature
 parse_trends = METAR.parse_trends
 parse_visibility = METAR.parse_visibility
 parse_wind = METAR.parse_wind
+is_valid_weather_code = METAR.is_valid_weather_code
 
 
 class MetarParserTests(unittest.TestCase):
@@ -80,6 +83,16 @@ class MetarParserTests(unittest.TestCase):
         self.assertEqual(upper_bound.speed, 99)
         self.assertEqual(upper_bound.speed_qualifier, "P")
 
+    def test_wind_supports_three_digit_speed_and_unit_specific_bounds(self):
+        high_wind = parse_wind("METAR TEST 010000Z 180100G120KT 9999=")
+        self.assertEqual(high_wind.speed, 100)
+        self.assertEqual(high_wind.gust, 120)
+
+        mps_bound = parse_wind("METAR TEST 010000Z 180P49MPS 9999=")
+        self.assertEqual(mps_bound.speed, 49)
+        self.assertEqual(mps_bound.speed_qualifier, "P")
+        self.assertIsNone(parse_wind("METAR TEST 010000Z 180P99MPS 9999="))
+
     def test_visibility_direction_and_cavok(self):
         visibility = parse_visibility("METAR TEST 010000Z 18005KT 4000NE BR=")
         self.assertEqual(visibility.metres, 4000)
@@ -90,6 +103,13 @@ class MetarParserTests(unittest.TestCase):
         self.assertTrue(cavok.cavok)
         self.assertIsNone(cavok.metres)
 
+    def test_visibility_preserves_directional_minimum(self):
+        visibility = parse_visibility(
+            "METAR TEST 010000Z 18005KT 4000 1500SW BR="
+        )
+        self.assertEqual(visibility.metres, 4000)
+        self.assertEqual(visibility.directional, ((1500, "SW"),))
+
     def test_present_weather_stops_before_trend(self):
         report = "SPECI TEST 010000Z 18005KT 4000 SHRA BR 20/19 Q1012 BECMG +TSRA"
         self.assertEqual(parse_present_weather(report), ["SHRA", "BR"])
@@ -99,6 +119,14 @@ class MetarParserTests(unittest.TestCase):
         self.assertEqual(
             parse_present_weather(report), ["-RASN", "+TSRAGR"]
         )
+
+    def test_present_weather_applies_code_book_descriptor_rules(self):
+        self.assertTrue(is_valid_weather_code("TS"))
+        self.assertTrue(is_valid_weather_code("VCSH"))
+        self.assertTrue(is_valid_weather_code("VCBLDU"))
+        self.assertFalse(is_valid_weather_code("SH"))
+        self.assertFalse(is_valid_weather_code("VCSN"))
+        self.assertFalse(is_valid_weather_code("-DZFG"))
 
     def test_report_header_flags_and_time(self):
         header = parse_report_header(
@@ -140,8 +168,25 @@ class MetarParserTests(unittest.TestCase):
             [25, 50, 75, 100, 0, 0],
         )
 
+    def test_auto_cloud_slash_groups_are_preserved(self):
+        clouds = parse_clouds(
+            "METAR TEST 010000Z 18005KT 9999 FEW/// BKN///CB ///020CB ////// VV///="
+        )
+        self.assertEqual(
+            [cloud.raw for cloud in clouds],
+            ["FEW///", "BKN///CB", "///020CB", "//////", "VV///"],
+        )
+        self.assertIsNone(clouds[0].height_feet)
+        self.assertEqual(clouds[2].height_feet, 2000)
+
     def test_runway_state_group_is_not_rvr(self):
         self.assertEqual(parse_rvr_metres("METAR TEST R06/290095="), [])
+
+    def test_unknown_rvr_is_preserved_without_becoming_zero(self):
+        groups = parse_rvr("METAR TEST 010000Z R06/////U R24/0800=")
+        self.assertIsNone(groups[0].lower_metres)
+        self.assertEqual(groups[0].trend, "U")
+        self.assertEqual(parse_rvr_metres("METAR TEST 010000Z R06/////U R24/0800="), [800])
 
     def test_trend_and_remark_groups_are_ignored(self):
         report = "METAR TEST 9999 20/18 Q1012 BECMG R06/0600U RMK R24/0500D="
@@ -166,6 +211,12 @@ class MetarParserTests(unittest.TestCase):
 
     def test_pressure(self):
         self.assertEqual(parse_pressure("METAR TEST 25/24 Q1011 NOSIG="), 1011)
+
+    def test_taiwan_rmk_altimeter_is_available_as_pressure_fallback(self):
+        report = "METAR TEST 010000Z 18005KT 9999 25/24 RMK A3027="
+        self.assertEqual(parse_altimeter_inches(report), 30.27)
+        self.assertEqual(parse_pressure(report), 1025)
+        self.assertEqual(parse_rmk_tokens(report), ("A3027",))
 
     def test_current_report_tokens_stop_at_forecast(self):
         report = "SPECI RCBS 291010Z 4000 SHRA 20/20 Q1011 BECMG 1500 +TSRA"

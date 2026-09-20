@@ -35,6 +35,9 @@ class LocalizationTests(unittest.TestCase):
             LOCALIZATION.localized_visibility_label(4, "fr"), "Very Good"
         )
 
+    def test_missing_visibility_has_no_display_label(self):
+        self.assertIsNone(LOCALIZATION.localized_visibility_label(None, "tw"))
+
     def test_weather_text_falls_back_when_preferred_text_is_missing(self):
         self.assertEqual(
             LOCALIZATION.localized_weather_text(

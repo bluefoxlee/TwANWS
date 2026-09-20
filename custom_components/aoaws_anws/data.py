@@ -18,10 +18,12 @@ from .const import (
     REQUEST_TIMEOUT,
 )
 from .metar import (
-    parse_dew_point,
+    parse_altimeter_inches,
     parse_clouds,
+    parse_dew_point,
     parse_present_weather,
     parse_pressure,
+    parse_rmk_tokens,
     parse_report_header,
     parse_rvr,
     parse_temperature,
@@ -76,6 +78,7 @@ class Observation:
         self.report_header = None
         self.observation_time = None
         self.trends = []
+        self.rmk_tokens = ()
         self.rvr_groups = []
         self.prevailing_visibility = None
         self.rvr_min = None
@@ -115,6 +118,10 @@ class Observation:
                 "direction": self.report_visibility.direction,
                 "cavok": self.report_visibility.cavok,
                 "raw": self.report_visibility.raw,
+                "directional": [
+                    {"metres": metres, "direction": direction}
+                    for metres, direction in self.report_visibility.directional
+                ],
             }
         if self.wind_report:
             attributes["wind_report"] = {
@@ -124,6 +131,8 @@ class Observation:
                 "unit": self.wind_report.unit,
                 "variable_from": self.wind_report.variable_from,
                 "variable_to": self.wind_report.variable_to,
+                "speed_qualifier": self.wind_report.speed_qualifier,
+                "gust_qualifier": self.wind_report.gust_qualifier,
                 "raw": self.wind_report.raw,
             }
         if self.rvr_groups:
@@ -139,6 +148,10 @@ class Observation:
                 }
                 for group in self.rvr_groups
             ]
+        if self.prevailing_visibility:
+            attributes["prevailing_visibility_km"] = self.prevailing_visibility.value
+        if self.rvr_min:
+            attributes["rvr_min_km"] = self.rvr_min.value
         if self.cloud_groups:
             attributes["cloud_layers"] = [
                 {
@@ -167,6 +180,11 @@ class Observation:
             attributes["cloud_ceiling_feet"] = self.cloud_ceiling.value
         if self.pressure:
             attributes["qnh_hpa"] = self.pressure.value
+        altimeter_inches = parse_altimeter_inches(self.raw_report or "")
+        if altimeter_inches is not None:
+            attributes["altimeter_inhg"] = altimeter_inches
+        if self.rmk_tokens:
+            attributes["rmk_tokens"] = list(self.rmk_tokens)
         return attributes
 
 
@@ -279,6 +297,7 @@ class AnwsAoawseData:
         )
 
         observation.raw_report = report
+        observation.rmk_tokens = parse_rmk_tokens(report)
         observation.report_header = parse_report_header(report)
         if observation.report_header and observation.report_header.nil:
             raise ValueError("METAR/SPECI report is NIL")
@@ -313,7 +332,7 @@ class AnwsAoawseData:
             wind_speed = (
                 observation.wind_report.speed
                 if observation.wind_report is not None
-                else 0
+                else None
             )
         if "00000KT" in report or "CALM" in report.upper() or "靜風" in report:
             wind_speed = 0
@@ -375,15 +394,22 @@ class AnwsAoawseData:
             elif observation.report_visibility and observation.report_visibility.cavok:
                 visibility_metres = 9999
             else:
-                visibility_metres = 0
-        prevailing_visibility_km = (
-            10.0 if visibility_metres >= 9999 else visibility_metres / 1000
-        )
+                visibility_metres = None
+        if visibility_metres is None:
+            prevailing_visibility_km = None
+        elif visibility_metres >= 9999:
+            prevailing_visibility_km = 10.0
+        else:
+            prevailing_visibility_km = visibility_metres / 1000
         observation.prevailing_visibility = Element(
             "VIS", value=prevailing_visibility_km, units=UnitOfLength.KILOMETERS
         )
 
-        rvr_values = [group.lower_metres for group in observation.rvr_groups]
+        rvr_values = [
+            group.lower_metres
+            for group in observation.rvr_groups
+            if group.lower_metres is not None
+        ]
         visibility_km = prevailing_visibility_km
         if rvr_values:
             rvr_min_km = min(rvr_values) / 1000

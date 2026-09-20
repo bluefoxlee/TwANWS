@@ -196,8 +196,30 @@ class DataConversionTests(unittest.TestCase):
         self.assertTrue(attributes["report_automated"])
         self.assertTrue(attributes["report_corrected"])
         self.assertEqual(attributes["rvr"][1]["lower_metres"], 500)
+        self.assertEqual(attributes["prevailing_visibility_km"], 0.8)
+        self.assertEqual(attributes["rvr_min_km"], 0.5)
         self.assertEqual(attributes["cloud_layers"][0]["height_feet"], 3000)
         self.assertEqual(attributes["trends"][0]["payload_tokens"], ["1500", "+TSRAGR"])
+
+    def test_observation_report_attributes_keep_code_book_supplementary_data(self):
+        report = (
+            "METAR AUTO RCBS 291010Z 180100G120KT 4000 1500SW "
+            "BKN///CB R06/////U 25/24 RMK A3027 TS SW MOV NE="
+        )
+        observation = self.client._convert_to_observation(
+            "Kinmen", [[_record(REPORT=report, VIS=4000, WDSD=None, WDIR=None)]]
+        )
+        attributes = observation.report_attributes()
+
+        self.assertEqual(attributes["wind_report"]["speed"], 100)
+        self.assertEqual(attributes["wind_report"]["gust"], 120)
+        self.assertEqual(
+            attributes["report_visibility"]["directional"],
+            [{"metres": 1500, "direction": "SW"}],
+        )
+        self.assertEqual(attributes["rvr"][0]["lower_metres"], None)
+        self.assertEqual(attributes["altimeter_inhg"], 30.27)
+        self.assertEqual(attributes["rmk_tokens"], ["A3027", "TS", "SW", "MOV", "NE"])
 
     def test_observation_keeps_report_header(self):
         report = "METAR AUTO RCBS 131200Z 18005KT 9999 25/24 Q1011="
@@ -259,6 +281,19 @@ class DataConversionTests(unittest.TestCase):
         self.assertEqual(observation.wind_speed.value, 12)
         self.assertEqual(observation.wind_direction.value, 270)
         self.assertEqual(observation.visibility.value, 3.5)
+
+    def test_missing_wind_and_visibility_stay_unknown(self):
+        report = "METAR RCBS 131200Z 25/24 Q1011="
+        record = _record(REPORT=report, WDSD=None, WDIR=None, VIS=None)
+        record.pop("WDSD")
+        record.pop("WDIR")
+        record.pop("VIS")
+
+        observation = self.client._convert_to_observation("Kinmen", [[record]])
+
+        self.assertIsNone(observation.wind_speed.value)
+        self.assertIsNone(observation.visibility.value)
+        self.assertIsNone(observation.prevailing_visibility.value)
 
     def test_temperature_falls_back_when_api_field_is_absent(self):
         report = "METAR RCBS 131200Z 18005KT 9999 05/01 Q1011="

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased (Code Book audit)
+
+### Added
+
+- Accept three-digit wind speeds and validate the Code Book upper-bound forms
+  `P99KT` and `P49MPS`.
+- Preserve AUTO cloud groups with `///` replacements, directional visibility
+  minima, unknown RVR groups, Taiwan RMK `Axxxx` altimeter data, and raw RMK
+  tokens in structured report attributes.
+- Expose prevailing visibility and minimum RVR as separate numeric attributes
+  for future visualisations.
+- Validate present-weather descriptor combinations against WMO/ICAO table
+  4678 so invalid combinations are not mistaken for current weather.
+
+### Fixed
+
+- Do not convert missing wind or visibility groups into false calm/zero values;
+  missing observations now remain unknown.
+
 ## 1.0.15
 
 ### Added

@@ -39,17 +39,21 @@ VISIBILITY_LABELS = {
 }
 
 
-def visibility_level(distance_km: float) -> str:
+def visibility_level(distance_km: float | None) -> str | None:
     """Return the stable English visibility level for a distance."""
+    if distance_km is None:
+        return None
     for level, threshold in VISIBILITY_LEVELS:
         if distance_km <= threshold:
             return level
     return VISIBILITY_LEVELS[-1][0]
 
 
-def localized_visibility_label(distance_km: float, language: str) -> str:
+def localized_visibility_label(distance_km: float | None, language: str) -> str | None:
     """Return a display label without changing the underlying distance."""
     level = visibility_level(distance_km)
+    if level is None:
+        return None
     labels = VISIBILITY_LABELS.get(language, VISIBILITY_LABELS["en"])
     return labels.get(level, level)
 

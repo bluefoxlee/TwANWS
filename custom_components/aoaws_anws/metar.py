@@ -1,8 +1,9 @@
 """Small METAR helpers used by the AOAWS data adapter.
 
-The ANWS JSON fields remain the primary data source.  Only values that are not
-provided separately by the API (dew point and pressure), plus runway visual
-range (RVR), are read from the raw METAR report.
+The ANWS JSON fields remain the primary data source.  The helpers read the raw
+METAR/SPECI for values that are missing from the API and preserve aviation
+details such as RVR, weather groups, cloud layers, trends, and Taiwan RMK
+supplementary data.
 """
 
 from __future__ import annotations
@@ -17,31 +18,48 @@ _RVR_RE = re.compile(
     r"(?P<unit>FT|M)?"
     r"(?P<trend>[UDN])?=?$"
 )
-_VISIBILITY_RE = re.compile(r"^(?P<value>\d{4})(?P<direction>[NSEW]{1,2})?$")
+_VISIBILITY_RE = re.compile(
+    r"^(?P<value>\d{4})(?P<direction>N|NE|E|SE|S|SW|W|NW)?$"
+)
 _CLOUD_RE = re.compile(
-    r"^(?P<amount>FEW|SCT|BKN|OVC)(?P<height>\d{3})(?P<type>CB|TCU)?$"
+    r"^(?P<amount>FEW|SCT|BKN|OVC|///)"
+    r"(?P<height>\d{3}|///)(?P<type>CB|TCU|///)?$"
 )
 _VERTICAL_VISIBILITY_RE = re.compile(r"^VV(?P<height>\d{3}|///)$")
 _REPORT_TIME_RE = re.compile(r"^\d{6}Z$")
 _TEMPERATURE_RE = re.compile(r"^(?P<temperature>M?\d{2})/(?P<dew_point>M?\d{2})=?$")
 _PRESSURE_RE = re.compile(r"^Q(?P<pressure>\d{4})=?$")
+_ALTIMETER_RE = re.compile(r"^A(?P<pressure>\d{4})=?$")
 _WIND_RE = re.compile(
     r"^(?P<direction>\d{3}|VRB)"
-    r"(?P<speed>P?\d{2})"
-    r"(?:G(?P<gust>P?\d{2}))?"
+    r"(?P<speed>P?\d{2,3})"
+    r"(?:G(?P<gust>P?\d{2,3}))?"
     r"(?P<unit>KT|MPS)$"
+)
+_UNKNOWN_RVR_RE = re.compile(
+    r"^(?P<runway>R\d{2}[LCR]?)/(?P<value>/+)(?P<trend>[UDN])?=?$"
 )
 _VARIABLE_WIND_RE = re.compile(r"^(?P<from>\d{3})V(?P<to>\d{3})$")
 _TREND_TIME_RE = re.compile(r"^(?P<marker>FM|TL|AT)(?P<time>\d{4})$")
-_TREND_WEATHER_RE = re.compile(
-    r"^(?:[+-]?(?:VC)?(?:TS|SH)|"
-    r"[+-]?(?:VC)?(?:MI|BC|PR|DR|BL|SH|TS|FZ)?"
-    r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS)"
-    r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP)?"
-    r")$"
-)
+_WEATHER_DESCRIPTORS = {"MI", "BC", "PR", "DR", "BL", "SH", "TS", "FZ"}
+_PRECIPITATION = {"DZ", "RA", "SN", "SG", "PL", "GR", "GS", "UP"}
+_OTHER_WEATHER = {
+    "BR", "FG", "FU", "VA", "DU", "SA", "HZ", "PO", "SQ", "FC", "SS", "DS"
+}
+_VC_WEATHER = {"TS", "DS", "SS", "FG", "FC", "SH", "PO", "BLDU", "BLSA", "BLSN", "VA"}
+_DESCRIPTOR_PHENOMENA = {
+    "MI": {"FG"},
+    "BC": {"FG"},
+    "PR": {"FG"},
+    "DR": {"DU", "SA", "SN"},
+    "BL": {"DU", "SA", "SN"},
+    "SH": {"RA", "SN", "GS", "GR", "UP"},
+    "TS": {"RA", "SN", "GS", "GR", "UP"},
+    "FZ": {"FG", "DZ", "RA", "UP"},
+}
 _TREND_CLOUD_RE = re.compile(
-    r"^(?:(?:FEW|SCT|BKN|OVC)\d{3}(?:CB|TCU)?|VV(?:\d{3}|///)|NSC|NCD)$"
+    r"^(?:(?:FEW|SCT|BKN|OVC|///)(?:\d{3}|///)(?:CB|TCU|///)?|"
+    r"VV(?:\d{3}|///)|NSC|NCD)$"
 )
 _TREND_MARKERS = {"BECMG", "TEMPO", "NOSIG", "RMK"}
 
@@ -56,7 +74,7 @@ class RvrGroup:
     """
 
     runway: str
-    lower: int
+    lower: int | None
     upper: int | None
     lower_qualifier: str | None
     upper_qualifier: str | None
@@ -71,8 +89,10 @@ class RvrGroup:
         return value
 
     @property
-    def lower_metres(self) -> int:
+    def lower_metres(self) -> int | None:
         """Return the lower RVR value in metres."""
+        if self.lower is None:
+            return None
         return self._to_metres(self.lower, self.unit)
 
     @property
@@ -132,6 +152,7 @@ class VisibilityGroup:
     direction: str | None
     cavok: bool
     raw: str
+    directional: tuple[tuple[int, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -216,7 +237,7 @@ class TrendGroup:
         return tuple(
             token
             for token in self.payload_tokens
-            if token == "NSW" or _TREND_WEATHER_RE.fullmatch(token) is not None
+            if is_valid_weather_code(token)
         )
 
     @property
@@ -225,7 +246,7 @@ class TrendGroup:
         return tuple(
             token
             for token in self.payload_tokens
-            if _TREND_CLOUD_RE.fullmatch(token) is not None
+            if _is_cloud_token(token)
         )
 
 
@@ -238,6 +259,69 @@ def current_report_tokens(report: str) -> list[str]:
             break
         tokens.append(token)
     return tokens
+
+
+def _weather_phenomena(value: str) -> tuple[str, ...] | None:
+    """Split the two-letter phenomena at the end of a weather group."""
+    if not value or len(value) % 2:
+        return None
+    phenomena = tuple(value[index:index + 2] for index in range(0, len(value), 2))
+    if len(phenomena) > 2:
+        return None
+    if any(item not in _PRECIPITATION | _OTHER_WEATHER for item in phenomena):
+        return None
+    return phenomena
+
+
+def is_valid_weather_code(token: str) -> bool:
+    """Return whether a token follows the Code Book's 4678 weather rules.
+
+    This deliberately validates the syntax and descriptor combinations only.
+    Range-dependent rules (for example BR visibility between 1,000 and 5,000
+    metres) are checked by callers that also have the visibility group.
+    """
+    value = token.rstrip("=")
+    if value in {"NSW", "//"}:
+        return value == "NSW"
+
+    intensity = value[:1] if value[:1] in "+-" else ""
+    value = value[1:] if intensity else value
+    if value.startswith("VC"):
+        # The Code Book treats VC as the alternative to intensity and limits
+        # it to the listed nearby phenomena.  In particular, VCSH and VCTS
+        # are complete groups on their own.
+        if intensity:
+            return False
+        return value[2:] in _VC_WEATHER
+
+    descriptor = None
+    for candidate in sorted(_WEATHER_DESCRIPTORS, key=len, reverse=True):
+        if value.startswith(candidate):
+            descriptor = candidate
+            value = value[len(candidate):]
+            break
+
+    phenomena = _weather_phenomena(value)
+    if descriptor is None:
+        # A precipitation combination may contain one or two precipitation
+        # phenomena; a non-precipitation group contains exactly one.
+        return phenomena is not None and (
+            len(phenomena) == 1
+            or all(item in _PRECIPITATION for item in phenomena)
+        )
+
+    if descriptor == "TS" and not value:
+        # TS alone means thunder/lightning without observed precipitation.
+        return not intensity
+    if phenomena is None or not phenomena:
+        return False
+    allowed = _DESCRIPTOR_PHENOMENA[descriptor]
+    return all(item in allowed for item in phenomena)
+
+
+def _is_cloud_token(token: str) -> bool:
+    """Return whether a token is a Code Book cloud/sky-condition group."""
+    return _TREND_CLOUD_RE.fullmatch(token.rstrip("=")) is not None
 
 
 def parse_report_header(report: str) -> ReportHeader | None:
@@ -347,12 +431,63 @@ def parse_dew_point(report: str, expected_temperature: int | None = None) -> int
 
 
 def parse_pressure(report: str) -> int | None:
-    """Return QNH pressure in hPa from the current part of a METAR report."""
+    """Return QNH pressure in hPa from Qxxxx or Taiwan RMK Axxxx."""
     for token in current_report_tokens(report):
         match = _PRESSURE_RE.fullmatch(token)
         if match is not None:
             return int(match.group("pressure"))
+
+    # Taiwan's local METAR/SPECI convention also reports QNH in RMK as
+    # Axxxx, where the value is hundredths of an inch Hg (for example
+    # A3027 = 30.27 inHg).  Keep Home Assistant's pressure unit in hPa.
+    tokens = [token.rstrip("=") for token in report.split()]
+    try:
+        remark_start = tokens.index("RMK") + 1
+    except ValueError:
+        return None
+    for token in tokens[remark_start:]:
+        match = _ALTIMETER_RE.fullmatch(token)
+        if match is not None:
+            inches_hg = int(match.group("pressure")) / 100
+            return round(inches_hg * 33.8638866667)
     return None
+
+
+def parse_altimeter_inches(report: str) -> float | None:
+    """Return the Taiwan RMK Axxxx value in inches Hg, if present."""
+    tokens = [token.rstrip("=") for token in report.split()]
+    try:
+        remark_start = tokens.index("RMK") + 1
+    except ValueError:
+        return None
+    for token in tokens[remark_start:]:
+        match = _ALTIMETER_RE.fullmatch(token)
+        if match is not None:
+            return int(match.group("pressure")) / 100
+    return None
+
+
+def parse_rmk_tokens(report: str) -> tuple[str, ...]:
+    """Return raw supplementary tokens following the RMK marker."""
+    tokens = [token.rstrip("=") for token in report.split()]
+    try:
+        return tuple(tokens[tokens.index("RMK") + 1:])
+    except ValueError:
+        return ()
+
+
+def _parse_wind_value(value: str, unit: str) -> tuple[int, str | None] | None:
+    """Parse a regular wind value or a Code Book upper-bound value."""
+    if value.startswith("P"):
+        # P99KT and P49MPS are the only upper-bound forms defined by the
+        # Code Book.  They intentionally retain their P qualifier elsewhere.
+        expected = "99" if unit == "KT" else "49"
+        if value != f"P{expected}":
+            return None
+        return int(expected), "P"
+    if len(value) not in {2, 3} or not value.isdigit():
+        return None
+    return int(value), None
 
 
 def parse_wind(report: str) -> WindGroup | None:
@@ -375,19 +510,24 @@ def parse_wind(report: str) -> WindGroup | None:
 
         speed_token = match.group("speed")
         gust_token = match.group("gust")
+        unit = match.group("unit")
+        speed_value = _parse_wind_value(speed_token, unit)
+        gust_value = _parse_wind_value(gust_token, unit) if gust_token else None
+        if speed_value is None or (gust_token and gust_value is None):
+            continue
         return WindGroup(
             direction=(
                 None
                 if match.group("direction") == "VRB"
                 else int(match.group("direction"))
             ),
-            speed=int(speed_token.lstrip("P")),
-            gust=int(gust_token.lstrip("P")) if gust_token else None,
-            unit=match.group("unit"),
+            speed=speed_value[0],
+            gust=gust_value[0] if gust_value else None,
+            unit=unit,
             variable_from=variable_from,
             variable_to=variable_to,
-            speed_qualifier="P" if speed_token.startswith("P") else None,
-            gust_qualifier=("P" if gust_token and gust_token.startswith("P") else None),
+            speed_qualifier=speed_value[1],
+            gust_qualifier=gust_value[1] if gust_value else None,
             raw=raw,
         )
     return None
@@ -395,6 +535,7 @@ def parse_wind(report: str) -> WindGroup | None:
 
 def parse_visibility(report: str) -> VisibilityGroup | None:
     """Parse prevailing visibility, directional visibility or CAVOK."""
+    groups: list[tuple[int, str | None, str]] = []
     for token in current_report_tokens(report):
         clean_token = token.rstrip("=")
         if clean_token == "CAVOK":
@@ -404,13 +545,28 @@ def parse_visibility(report: str) -> VisibilityGroup | None:
 
         match = _VISIBILITY_RE.fullmatch(clean_token)
         if match is not None:
-            return VisibilityGroup(
-                metres=int(match.group("value")),
-                direction=match.group("direction"),
-                cavok=False,
-                raw=clean_token,
+            groups.append(
+                (int(match.group("value")), match.group("direction"), clean_token)
             )
-    return None
+    if not groups:
+        return None
+
+    # The first undirected value is prevailing visibility.  Keep all
+    # directional minima so the raw Code Book VNVNVNVNDv information is not
+    # lost, while retaining the historical single-group API for callers.
+    prevailing = next((group for group in groups if group[1] is None), groups[0])
+    directional = tuple(
+        (metres, direction)
+        for metres, direction, _raw in groups
+        if direction is not None
+    )
+    return VisibilityGroup(
+        metres=prevailing[0],
+        direction=prevailing[1],
+        cavok=False,
+        raw=prevailing[2],
+        directional=directional,
+    )
 
 
 def parse_present_weather(report: str) -> list[str]:
@@ -418,8 +574,44 @@ def parse_present_weather(report: str) -> list[str]:
     return [
         token.rstrip("=")
         for token in current_report_tokens(report)
-        if _TREND_WEATHER_RE.fullmatch(token.rstrip("=")) is not None
+        if is_valid_weather_code(token)
     ]
+
+
+def _parse_cloud_group(clean_token: str) -> CloudGroup | None:
+    """Parse a cloud group, including AUTO slash replacements."""
+    match = _CLOUD_RE.fullmatch(clean_token)
+    if match is not None:
+        raw_height = match.group("height")
+        cloud_type = match.group("type")
+        return CloudGroup(
+            amount=match.group("amount"),
+            height_hundreds_ft=int(raw_height) if raw_height != "///" else None,
+            cloud_type=cloud_type if cloud_type not in {None, "///"} else None,
+            vertical_visibility=False,
+            raw=clean_token,
+        )
+
+    vertical_match = _VERTICAL_VISIBILITY_RE.fullmatch(clean_token)
+    if vertical_match is not None:
+        raw_height = vertical_match.group("height")
+        return CloudGroup(
+            amount="VV",
+            height_hundreds_ft=int(raw_height) if raw_height != "///" else None,
+            cloud_type=None,
+            vertical_visibility=True,
+            raw=clean_token,
+        )
+
+    if clean_token in {"NSC", "NCD"}:
+        return CloudGroup(
+            amount=clean_token,
+            height_hundreds_ft=None,
+            cloud_type=None,
+            vertical_visibility=False,
+            raw=clean_token,
+        )
+    return None
 
 
 def parse_clouds(report: str) -> list[CloudGroup]:
@@ -427,45 +619,9 @@ def parse_clouds(report: str) -> list[CloudGroup]:
     clouds: list[CloudGroup] = []
     for token in current_report_tokens(report):
         clean_token = token.rstrip("=")
-        match = _CLOUD_RE.fullmatch(clean_token)
-        if match is not None:
-            clouds.append(
-                CloudGroup(
-                    amount=match.group("amount"),
-                    height_hundreds_ft=int(match.group("height")),
-                    cloud_type=match.group("type"),
-                    vertical_visibility=False,
-                    raw=clean_token,
-                )
-            )
-            continue
-
-        vertical_match = _VERTICAL_VISIBILITY_RE.fullmatch(clean_token)
-        if vertical_match is not None:
-            raw_height = vertical_match.group("height")
-            clouds.append(
-                CloudGroup(
-                    amount="VV",
-                    height_hundreds_ft=(
-                        int(raw_height) if raw_height != "///" else None
-                    ),
-                    cloud_type=None,
-                    vertical_visibility=True,
-                    raw=clean_token,
-                )
-            )
-            continue
-
-        if clean_token in {"NSC", "NCD"}:
-            clouds.append(
-                CloudGroup(
-                    amount=clean_token,
-                    height_hundreds_ft=None,
-                    cloud_type=None,
-                    vertical_visibility=False,
-                    raw=clean_token,
-                )
-            )
+        cloud = _parse_cloud_group(clean_token)
+        if cloud is not None:
+            clouds.append(cloud)
     return clouds
 
 
@@ -478,7 +634,24 @@ def parse_rvr(report: str) -> list[RvrGroup]:
     """
     groups: list[RvrGroup] = []
     for token in current_report_tokens(report):
-        match = _RVR_RE.fullmatch(token)
+        clean_token = token.rstrip("=")
+        unknown_match = _UNKNOWN_RVR_RE.fullmatch(clean_token)
+        if unknown_match is not None:
+            groups.append(
+                RvrGroup(
+                    runway=unknown_match.group("runway"),
+                    lower=None,
+                    upper=None,
+                    lower_qualifier=None,
+                    upper_qualifier=None,
+                    unit="M",
+                    trend=unknown_match.group("trend"),
+                    raw=clean_token,
+                )
+            )
+            continue
+
+        match = _RVR_RE.fullmatch(clean_token)
         if match is None:
             continue
 
@@ -498,7 +671,7 @@ def parse_rvr(report: str) -> list[RvrGroup]:
                 upper_qualifier=upper_qualifier,
                 unit=unit,
                 trend=match.group("trend"),
-                raw=token.rstrip("="),
+                raw=clean_token,
             )
         )
     return groups
@@ -512,4 +685,8 @@ def parse_rvr_metres(report: str) -> list[int]:
     (for example ``R24/800M``) are accepted.  For a variable RVR group the
     lower value is deliberately used.
     """
-    return [group.lower_metres for group in parse_rvr(report)]
+    return [
+        value
+        for group in parse_rvr(report)
+        if (value := group.lower_metres) is not None
+    ]
