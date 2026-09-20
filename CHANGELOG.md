@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (Code Book audit)
+## 1.0.16 (Code Book audit)
 
 ### Added
 
