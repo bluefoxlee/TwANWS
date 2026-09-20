@@ -77,10 +77,10 @@ class AnwsAoawsCurrentSensor(SensorEntity):
             value = localized_visibility_label(_visibility, self._data.language)
 
         elif self._type == "weather" and hasattr(self.anws_aoaws_now, self._type):
-            for k, v in CONDITION_CLASSES.items():
-                if self.anws_aoaws_now.weather.value.lower().strip() in v:
-                    return k
-            return None
+            return (
+                self.anws_aoaws_now.weather.text
+                or self._weather_condition()
+            )
 
         elif hasattr(self.anws_aoaws_now, self._type):
             value = getattr(self.anws_aoaws_now, self._type)
@@ -100,7 +100,9 @@ class AnwsAoawsCurrentSensor(SensorEntity):
         """Return the icon for the entity card."""
         value = SENSOR_TYPES[self._type][3]
         if self._type == "weather":
-            value = self.native_value
+            # The sensor state is localized for display, so use the stable
+            # Home Assistant condition value when selecting the icon.
+            value = self._weather_condition()
             if value is None:
                 value = "sunny"
             elif value == "partlycloudy":
@@ -113,6 +115,16 @@ class AnwsAoawsCurrentSensor(SensorEntity):
     def device_class(self):
         """Return the device class of the sensor."""
         return SENSOR_TYPES[self._type][1]
+
+    def _weather_condition(self):
+        """Return the stable Home Assistant weather condition value."""
+        if not self.anws_aoaws_now or not self.anws_aoaws_now.weather:
+            return None
+        normalized = str(self.anws_aoaws_now.weather.value).lower().strip()
+        for condition, descriptions in CONDITION_CLASSES.items():
+            if normalized in descriptions:
+                return condition
+        return None
 
     @property
     def extra_state_attributes(self):
@@ -129,6 +141,7 @@ class AnwsAoawsCurrentSensor(SensorEntity):
             and self.anws_aoaws_now.weather
         ):
             attr[ATTR_WEATHER_TEXT] = self.anws_aoaws_now.weather.text
+            attr["weather_condition"] = self._weather_condition()
         if (
             self._type == "visibility"
             and self.anws_aoaws_now

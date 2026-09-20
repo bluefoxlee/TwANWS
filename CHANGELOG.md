@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.13
+
+### Fixed
+
+- Show the configured-language weather text on the generic weather sensor
+  instead of exposing only the internal Home Assistant condition key.
+- Keep the stable condition key available as `weather_condition` and continue
+  using it for weather icons.
+
 ## 1.0.12
 
 ### Added
