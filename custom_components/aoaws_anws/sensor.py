@@ -148,6 +148,7 @@ class AnwsAoawsCurrentSensor(SensorEntity):
         ):
             attr[ATTR_WEATHER_TEXT] = self.anws_aoaws_now.weather.text
             attr["weather_condition"] = self._weather_condition()
+            attr.update(self.anws_aoaws_now.report_attributes())
         if (
             self._type == "visibility"
             and self.anws_aoaws_now

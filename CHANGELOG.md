@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.15
+
+### Added
+
+- Expose JSON-safe aviation report attributes, including report header flags,
+  raw METAR, RVR groups, wind details, visibility, cloud layers, QNH, and
+  trend groups on the weather entities.
+- Preserve native Home Assistant cloud coverage while exposing detailed cloud
+  layers and derived cloud ceiling for future card layouts.
+
 ## 1.0.14
 
 ### Added

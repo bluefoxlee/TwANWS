@@ -90,6 +90,85 @@ class Observation:
 
         return elements
 
+    def report_attributes(self):
+        """Return JSON-safe aviation report details for entity attributes."""
+        attributes = {}
+
+        if self.report_header:
+            attributes.update(
+                {
+                    "report_type": self.report_header.kind,
+                    "report_station": self.report_header.station,
+                    "report_time_utc": self.report_header.report_time_utc,
+                    "report_automated": self.report_header.automated,
+                    "report_corrected": self.report_header.corrected,
+                    "report_nil": self.report_header.nil,
+                }
+            )
+        if self.raw_report:
+            attributes["raw_metar"] = self.raw_report
+        if self.weather_codes:
+            attributes["weather_codes"] = list(self.weather_codes)
+        if self.report_visibility:
+            attributes["report_visibility"] = {
+                "metres": self.report_visibility.metres,
+                "direction": self.report_visibility.direction,
+                "cavok": self.report_visibility.cavok,
+                "raw": self.report_visibility.raw,
+            }
+        if self.wind_report:
+            attributes["wind_report"] = {
+                "direction": self.wind_report.direction,
+                "speed": self.wind_report.speed,
+                "gust": self.wind_report.gust,
+                "unit": self.wind_report.unit,
+                "variable_from": self.wind_report.variable_from,
+                "variable_to": self.wind_report.variable_to,
+                "raw": self.wind_report.raw,
+            }
+        if self.rvr_groups:
+            attributes["rvr"] = [
+                {
+                    "runway": group.runway,
+                    "lower_metres": group.lower_metres,
+                    "upper_metres": group.upper_metres,
+                    "lower_qualifier": group.lower_qualifier,
+                    "upper_qualifier": group.upper_qualifier,
+                    "trend": group.trend,
+                    "raw": group.raw,
+                }
+                for group in self.rvr_groups
+            ]
+        if self.cloud_groups:
+            attributes["cloud_layers"] = [
+                {
+                    "amount": cloud.amount,
+                    "height_feet": cloud.height_feet,
+                    "cloud_type": cloud.cloud_type,
+                    "coverage_percent": cloud.coverage_percent,
+                    "vertical_visibility": cloud.vertical_visibility,
+                    "raw": cloud.raw,
+                }
+                for cloud in self.cloud_groups
+            ]
+        if self.trends:
+            attributes["trends"] = [
+                {
+                    "kind": trend.kind,
+                    "time_markers": trend.time_markers,
+                    "payload_tokens": list(trend.payload_tokens),
+                    "raw": trend.raw,
+                }
+                for trend in self.trends
+            ]
+        if self.cloud_coverage is not None:
+            attributes["cloud_coverage_percent"] = self.cloud_coverage.value
+        if self.cloud_ceiling and self.cloud_ceiling.value not in (None, ""):
+            attributes["cloud_ceiling_feet"] = self.cloud_ceiling.value
+        if self.pressure:
+            attributes["qnh_hpa"] = self.pressure.value
+        return attributes
+
 
 class AnwsAoawseData:
     """Get current AOAWS from ANWS.

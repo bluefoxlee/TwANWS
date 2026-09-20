@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import importlib.util
+import json
 import sys
 import types
 import unittest
@@ -177,6 +178,26 @@ class DataConversionTests(unittest.TestCase):
         self.assertEqual(len(observation.trends), 1)
         self.assertEqual(observation.trends[0].kind, "BECMG")
         self.assertEqual(observation.trends[0].tokens, ("1500", "+TSRA"))
+
+    def test_observation_report_attributes_are_json_safe(self):
+        report = (
+            "SPECI AUTO COR RCBS 291010Z 18012G25KT 140V220 0800 "
+            "R24/800M R24/500M BKN030CB 25/24 Q1011 "
+            "BECMG 1500 +TSRAGR"
+        )
+        observation = self.client._convert_to_observation(
+            "Kinmen", [[_record(REPORT=report, VIS=800)]]
+        )
+
+        attributes = observation.report_attributes()
+        json.dumps(attributes)
+
+        self.assertEqual(attributes["report_type"], "SPECI")
+        self.assertTrue(attributes["report_automated"])
+        self.assertTrue(attributes["report_corrected"])
+        self.assertEqual(attributes["rvr"][1]["lower_metres"], 500)
+        self.assertEqual(attributes["cloud_layers"][0]["height_feet"], 3000)
+        self.assertEqual(attributes["trends"][0]["payload_tokens"], ["1500", "+TSRAGR"])
 
     def test_observation_keeps_report_header(self):
         report = "METAR AUTO RCBS 131200Z 18005KT 9999 25/24 Q1011="

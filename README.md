@@ -39,6 +39,7 @@ Then restart Home Assistant.
 - Derives cloud coverage and ceiling from METAR cloud groups when needed, including `CAVOK`, `NSC`, `NCD`, and combined precipitation phenomena.
 - Localizes visibility labels and weather text according to the integration language while preserving standard Home Assistant condition values.
 - Exposes separate integration update and station observation timestamps to distinguish a stale airport report from a failed HA update.
+- Exposes JSON-safe report header, raw METAR, RVR, wind, visibility, cloud-layer, and trend attributes for future cards.
 - Keeps the last valid observation during temporary API or overnight station outages and retries on the next five-minute poll.
 - Uses Home Assistant's native weather and sensor value/unit interfaces.
 

@@ -228,6 +228,7 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
         }
         if self.anws_aoaws_now and self.anws_aoaws_now.weather:
             attributes[ATTR_WEATHER_TEXT] = self.anws_aoaws_now.weather.text
+            attributes.update(self.anws_aoaws_now.report_attributes())
         return attributes
 
     async def async_added_to_hass(self) -> None:
