@@ -205,11 +205,27 @@ class AnwsAoawseData:
         observation.report_visibility = parse_visibility(report)
         observation.weather_codes = parse_present_weather(report)
         observation.cloud_groups = parse_clouds(report)
+        cloud_coverages = [
+            cloud.coverage_percent
+            for cloud in observation.cloud_groups
+            if cloud.coverage_percent is not None
+        ]
+        if cloud_coverages:
+            observation.cloud_coverage = Element(
+                "CC", value=max(cloud_coverages)
+            )
+        elif observation.report_visibility and observation.report_visibility.cavok:
+            # CAVOK includes no significant cloud below the applicable
+            # aerodrome minimum; expose that as clear sky coverage.
+            observation.cloud_coverage = Element("CC", value=0)
         if observation.wind_report is not None:
             observation.wind_variable_from = observation.wind_report.variable_from
             observation.wind_variable_to = observation.wind_report.variable_to
+        wind_speed_value = record.get("WDSD")
         try:
-            wind_speed = int(record.get("WDSD", 0))
+            if wind_speed_value in (None, ""):
+                raise ValueError
+            wind_speed = int(wind_speed_value)
         except (TypeError, ValueError):
             wind_speed = (
                 observation.wind_report.speed
@@ -240,8 +256,11 @@ class AnwsAoawseData:
                 "WG", value=observation.wind_report.gust, units=gust_unit
             )
 
+        wind_direction_value = record.get("WDIR")
         try:
-            wind_direction = int(record.get("WDIR", 0))
+            if wind_direction_value in (None, ""):
+                raise ValueError
+            wind_direction = int(wind_direction_value)
         except (TypeError, ValueError):
             wind_direction = (
                 observation.wind_report.direction
@@ -262,7 +281,18 @@ class AnwsAoawseData:
         if pressure is not None:
             observation.pressure = Element("P", value=pressure)
 
-        visibility_metres = int(record.get("VIS", 0))
+        visibility_value = record.get("VIS")
+        try:
+            if visibility_value in (None, ""):
+                raise ValueError
+            visibility_metres = int(visibility_value)
+        except (TypeError, ValueError):
+            if observation.report_visibility and observation.report_visibility.metres is not None:
+                visibility_metres = observation.report_visibility.metres
+            elif observation.report_visibility and observation.report_visibility.cavok:
+                visibility_metres = 9999
+            else:
+                visibility_metres = 0
         prevailing_visibility_km = (
             10.0 if visibility_metres >= 9999 else visibility_metres / 1000
         )
@@ -283,9 +313,18 @@ class AnwsAoawseData:
             "W", value=visibility_km, units=UnitOfLength.KILOMETERS
         )
 
-        observation.cloud_ceiling = Element(
-            "W", value=record.get("CEILING", "")
-        )
+        ceiling_value = record.get("CEILING")
+        if ceiling_value in (None, ""):
+            parsed_ceilings = [
+                cloud.height_feet
+                for cloud in observation.cloud_groups
+                if cloud.is_ceiling and cloud.height_feet is not None
+            ]
+            if parsed_ceilings:
+                ceiling_value = min(parsed_ceilings)
+        if ceiling_value is None:
+            ceiling_value = ""
+        observation.cloud_ceiling = Element("W", value=ceiling_value)
         return observation
 
 

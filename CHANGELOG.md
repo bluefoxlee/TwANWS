@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Derive Home Assistant cloud coverage from METAR cloud amounts and fall back
+  to the lowest reported BKN/OVC/VV layer for cloud ceiling when ANWS does not
+  provide one.
+- Treat CAVOK as zero cloud coverage when no API cloud value is available.
+- Accept combined precipitation weather groups such as `RASN`, `SHRASN`, and
+  `+TSRAGR`.
+
+### Fixed
+
+- Fall back to METAR wind direction, wind speed, and visibility when the
+  corresponding ANWS JSON keys are absent, instead of treating missing values
+  as zero.
+
 ## 1.0.10
 
 ### Added

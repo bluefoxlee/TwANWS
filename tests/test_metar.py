@@ -94,6 +94,12 @@ class MetarParserTests(unittest.TestCase):
         report = "SPECI TEST 010000Z 18005KT 4000 SHRA BR 20/19 Q1012 BECMG +TSRA"
         self.assertEqual(parse_present_weather(report), ["SHRA", "BR"])
 
+    def test_present_weather_accepts_combined_precipitation(self):
+        report = "METAR TEST 010000Z 18005KT 4000 -RASN +TSRAGR 20/19 Q1012="
+        self.assertEqual(
+            parse_present_weather(report), ["-RASN", "+TSRAGR"]
+        )
+
     def test_report_header_flags_and_time(self):
         header = parse_report_header(
             "SPECI AUTO COR RCBS 201230Z 18005KT 9999="
@@ -129,6 +135,10 @@ class MetarParserTests(unittest.TestCase):
         )
         self.assertTrue(clouds[2].is_ceiling)
         self.assertTrue(clouds[3].is_ceiling)
+        self.assertEqual(
+            [cloud.coverage_percent for cloud in clouds],
+            [25, 50, 75, 100, 0, 0],
+        )
 
     def test_runway_state_group_is_not_rvr(self):
         self.assertEqual(parse_rvr_metres("METAR TEST R06/290095="), [])

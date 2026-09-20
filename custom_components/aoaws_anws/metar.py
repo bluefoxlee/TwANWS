@@ -36,7 +36,9 @@ _TREND_TIME_RE = re.compile(r"^(?P<marker>FM|TL|AT)(?P<time>\d{4})$")
 _TREND_WEATHER_RE = re.compile(
     r"^(?:[+-]?(?:VC)?(?:TS|SH)|"
     r"[+-]?(?:VC)?(?:MI|BC|PR|DR|BL|SH|TS|FZ)?"
-    r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS))$"
+    r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS)"
+    r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP)?"
+    r")$"
 )
 _TREND_CLOUD_RE = re.compile(
     r"^(?:(?:FEW|SCT|BKN|OVC)\d{3}(?:CB|TCU)?|VV(?:\d{3}|///)|NSC|NCD)$"
@@ -153,6 +155,25 @@ class CloudGroup:
     def is_ceiling(self) -> bool:
         """Return whether this group contributes to the operational ceiling."""
         return self.vertical_visibility or self.amount in {"BKN", "OVC"}
+
+    @property
+    def coverage_percent(self) -> int | None:
+        """Return an operational sky-cover percentage for this group.
+
+        METAR cloud amounts are reported in oktas rather than percentages.
+        Home Assistant weather entities use percentages, so use the standard
+        midpoint representation for FEW/SCT/BKN and 100% for OVC/VV.
+        NSC/NCD explicitly report no significant cloud.
+        """
+        return {
+            "FEW": 25,
+            "SCT": 50,
+            "BKN": 75,
+            "OVC": 100,
+            "VV": 100,
+            "NSC": 0,
+            "NCD": 0,
+        }.get(self.amount)
 
 
 @dataclass(frozen=True)

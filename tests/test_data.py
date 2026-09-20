@@ -200,6 +200,19 @@ class DataConversionTests(unittest.TestCase):
         self.assertEqual(observation.wind_speed.units, "m/s")
         self.assertIsNone(observation.wind_direction.value)
 
+    def test_wind_and_visibility_fall_back_when_api_keys_are_absent(self):
+        report = "METAR RCBS 131200Z 27012KT 3500 25/24 Q1011="
+        record = _record(REPORT=report, WDSD=None, WDIR=None, VIS=None)
+        record.pop("WDSD")
+        record.pop("WDIR")
+        record.pop("VIS")
+
+        observation = self.client._convert_to_observation("Kinmen", [[record]])
+
+        self.assertEqual(observation.wind_speed.value, 12)
+        self.assertEqual(observation.wind_direction.value, 270)
+        self.assertEqual(observation.visibility.value, 3.5)
+
     def test_temperature_falls_back_when_api_field_is_absent(self):
         report = "METAR RCBS 131200Z 18005KT 9999 05/01 Q1011="
         record = _record(REPORT=report)
@@ -240,6 +253,24 @@ class DataConversionTests(unittest.TestCase):
         self.assertEqual(len(observation.cloud_groups), 2)
         self.assertEqual(observation.cloud_groups[0].raw, "SCT018CB")
         self.assertEqual(observation.cloud_groups[1].height_feet, 3000)
+
+    def test_cloud_coverage_and_ceiling_fall_back_to_metar(self):
+        report = "METAR RCBS 010000Z 18005KT 9999 SCT018CB BKN030 Q1011="
+        observation = self.client._convert_to_observation(
+            "Kinmen", [[_record(REPORT=report, CEILING=None)]]
+        )
+
+        self.assertEqual(observation.cloud_coverage.value, 75)
+        self.assertEqual(observation.cloud_ceiling.value, 3000)
+
+    def test_cavok_falls_back_to_zero_cloud_coverage(self):
+        report = "METAR RCBS 010000Z 18005KT CAVOK 25/24 Q1011="
+        observation = self.client._convert_to_observation(
+            "Kinmen", [[_record(REPORT=report, CEILING=None)]]
+        )
+
+        self.assertEqual(observation.cloud_coverage.value, 0)
+        self.assertEqual(observation.cloud_ceiling.value, "")
 
 
 if __name__ == "__main__":

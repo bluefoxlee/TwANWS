@@ -34,7 +34,8 @@
 - 支援常見 RVR 格式；多跑道同時回報時取最低值，並在有 RVR 時覆蓋一般能見度。
 - 保存結構化 RVR、趨勢、風組、能見度、天氣、雲組與報告標頭資料，供後續診斷與呈現使用。
 - 支援 METAR／SPECI 的 `BECMG`、`TEMPO`、`NOSIG`、`AUTO`、`COR` 與 `NIL` 群組。
-- ANWS JSON 欄位缺失或無效時，可回退使用 METAR 溫度與風組資料。
+- ANWS JSON 欄位缺失或無效時，可回退使用 METAR 溫度、風組與能見度資料。
+- 依 METAR 雲層群組補足雲量百分比與雲底高度；支援 `CAVOK`、`NSC`、`NCD` 與複合降水現象。
 - API 或機場夜間暫停資料時保留最後有效觀測，下次五分鐘輪詢會自動重試。
 - 改用 Home Assistant 的 `native_*` weather / sensor 數值與單位介面。
 

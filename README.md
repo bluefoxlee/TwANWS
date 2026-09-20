@@ -35,7 +35,8 @@ Then restart Home Assistant.
 - Parses common RVR forms and uses the lowest runway value when RVR is present.
 - Preserves structured RVR, trend, wind, visibility, weather, cloud, and report-header data for later diagnostics.
 - Handles METAR/SPECI `BECMG`, `TEMPO`, `NOSIG`, `AUTO`, `COR`, and `NIL` groups.
-- Falls back to METAR temperature and wind groups when ANWS JSON fields are missing or invalid.
+- Falls back to METAR temperature, wind, and visibility groups when ANWS JSON fields are missing or invalid.
+- Derives cloud coverage and ceiling from METAR cloud groups when needed, including `CAVOK`, `NSC`, `NCD`, and combined precipitation phenomena.
 - Keeps the last valid observation during temporary API or overnight station outages and retries on the next five-minute poll.
 - Uses Home Assistant's native weather and sensor value/unit interfaces.
 
