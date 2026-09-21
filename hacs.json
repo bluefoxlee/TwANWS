@@ -1,5 +1,5 @@
 {
-  "name": "Taiwan ANWS",
+  "name": "Advanced Operational Aviation Weather System (AOAWS)",
   "render_readme": true,
   "domain": "aoaws_anws",
   "documentation": "https://github.com/bluefoxlee/TwANWS",

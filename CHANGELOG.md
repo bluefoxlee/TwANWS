@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.17
+
+### Changed
+
+- Align user-facing names with the official Advanced Operational Aviation Weather System (AOAWS) system name.
+- Identify the data provider as Air Navigation and Weather Services, CAA, MOTC (ANWS), operated via AOAWS.
+
 ## 1.0.16 (Code Book audit)
 
 ### Added
