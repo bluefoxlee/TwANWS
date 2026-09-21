@@ -1,6 +1,6 @@
 <a href="https://www.buymeacoffee.com/tsunglung" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="30" width="120"></a>
 
-航空氣象服務網 觀測資料 [TwANWS](https://aoaws.anws.gov.tw/) 支援 Home Assistant
+航空氣象現代化系統（AOAWS）觀測資料 [AOAWS](https://aoaws.anws.gov.tw/) 支援 Home Assistant
 
 
 這個整合是基於 MetOffice 所做的開發。
@@ -20,7 +20,7 @@
 **請使用 Home Assistant 整合設定**
 
 
-1. 從 GUI. 設定 > 整合 > 新增 整合 > Taiwan Navigation Weather Services (NWS)
+1. 從 GUI. 設定 > 整合 > 新增整合 > Advanced Operational Aviation Weather System (AOAWS)
    1. 如果 TwANWS 沒有出現在清單裡，請 重新整理 (REFRESH) 網頁。
    2. 如果 TwANWS 還是沒有出現在清單裡，請清除瀏覽器的快取 (Cache)。
 2. 選擇機場名稱。
@@ -47,6 +47,8 @@
 本專案是從原始 TwANWS 專案 fork 出來、獨立維護的分支。版本號與 release tag 由本分支自行管理，與原作者版本獨立；同時保留並註明原作者的貢獻。各版本的詳細變更記錄請見 [CHANGELOG.md](CHANGELOG.md)。
 
 1.0.16 已依航空氣象電碼彙編進行 Code Book 稽核，涵蓋 ICAO/WMO 表 4678 天氣組合、風速限制、RVR 格式、AUTO 雲組，以及台灣 RMK 氣壓資料。
+
+AOAWS 由交通部民用航空局飛航服務總臺（Air Navigation and Weather Services, CAA, MOTC；ANWS）提供與維運。
 
 完整版本說明請見 [CHANGELOG.md](CHANGELOG.md)。
 

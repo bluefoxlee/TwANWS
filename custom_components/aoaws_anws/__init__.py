@@ -1,4 +1,4 @@
-"""The Taiwan ANWS integration."""
+"""The AOAWS integration."""
 import asyncio
 import logging
 
@@ -40,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     anws_aoaws_coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
-        name=f"ANWS AOAWS for {site_name}",
+        name=f"AOAWS for {site_name}",
         update_method=anws_aoaws_data.async_update,
         update_interval=DEFAULT_SCAN_INTERVAL,
     )
@@ -99,7 +99,7 @@ def device_info(config_entry: ConfigEntry) -> DeviceInfo:
     return DeviceInfo(
         entry_type=DeviceEntryType.SERVICE,
         identifiers={(DOMAIN, config_entry.entry_id)},
-        manufacturer="Taiwan ANWS",
+        manufacturer="Air Navigation and Weather Services, CAA, MOTC",
         name=config_entry.title,
         configuration_url="https://aoaws.anws.gov.tw/",
     )

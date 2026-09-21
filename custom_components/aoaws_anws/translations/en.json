@@ -15,7 +15,7 @@
                     "location_name": "Weather Station"
                 },
                 "description": "Please use the closest weather station.",
-                "title": "Connect to the ANWS"
+                "title": "Connect to AOAWS"
             }
         }
     },
