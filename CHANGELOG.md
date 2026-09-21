@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.18
+
+### Changed
+
+- Use the official Air Navigation and Weather Services, CAA, MOTC wording for entity attribution while retaining AOAWS as the service name.
+
 ## 1.0.17
 
 ### Changed

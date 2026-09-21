@@ -30,7 +30,7 @@ DOMAIN = "aoaws_anws"
 
 DEFAULT_NAME = "AOAWS"
 DEFAULT_LANGUAGE = "tw"
-ATTRIBUTION = "Data provided by Air Navigation and Weather Services, CAA, MOTC via AOAWS"
+ATTRIBUTION = "Data provided by Air Navigation and Weather Services, CAA, MOTC"
 ATTR_LAST_UPDATE = "last_update"
 ATTR_OBSERVATION_TIME = "observation_time"
 ATTR_SENSOR_ID = "sensor_id"

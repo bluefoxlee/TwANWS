@@ -3,7 +3,7 @@
   "name": "Advanced Operational Aviation Weather System (AOAWS)",
   "documentation": "https://github.com/bluefoxlee/TwANWS",
   "issue_tracker": "https://github.com/bluefoxlee/TwANWS/issues",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "requirements": [],
   "codeowners": ["@bluefoxlee"],
   "config_flow": true,
