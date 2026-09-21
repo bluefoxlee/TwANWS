@@ -62,6 +62,10 @@ _load_module(
     f"{PACKAGE}.localization",
     ROOT / "custom_components" / "aoaws_anws" / "localization.py",
 )
+_load_module(
+    f"{PACKAGE}.trend",
+    ROOT / "custom_components" / "aoaws_anws" / "trend.py",
+)
 data_module = _load_module(
     f"{PACKAGE}.data",
     ROOT / "custom_components" / "aoaws_anws" / "data.py",
@@ -164,6 +168,37 @@ class DataConversionTests(unittest.TestCase):
         self.assertTrue(self.client.forecast)
         self.assertIsNotNone(self.client.last_update)
         self.assertIn("T", self.client.last_update)
+        self.assertEqual(
+            self.client.now.report_attributes()["trend_state"],
+            "unknown",
+        )
+
+    def test_successive_refreshes_expose_deteriorating_trend(self):
+        self.client._update_site = lambda: True
+        self.client.data = [[
+            _record(
+                REPORT="METAR RCBS 130146Z 19006KT 9999 25/24 Q1011=",
+                VIS=9999,
+            )
+        ]]
+        self.client._update()
+
+        self.client.data = [[
+            _record(
+                datatime="2026-04-13T01:51:00Z",
+                REPORT=(
+                    "SPECI RCBS 130151Z 19006KT 5000 "
+                    "+TSRA 25/24 Q1011="
+                ),
+                VIS=5000,
+            )
+        ]]
+        self.client._update()
+
+        attributes = self.client.now.report_attributes()
+        self.assertEqual(attributes["trend_state"], "deteriorating")
+        self.assertIn("visibility_decreasing", attributes["trend_reasons"])
+        self.assertIn("thunderstorm_present", attributes["trend_reasons"])
 
     def test_observation_keeps_raw_report_and_trends(self):
         report = (

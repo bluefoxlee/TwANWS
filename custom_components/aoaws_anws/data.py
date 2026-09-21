@@ -32,6 +32,7 @@ from .metar import (
     parse_wind,
 )
 from .localization import localized_weather_text
+from .trend import TrendResult, compare_observations, unknown_trend
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ class Observation:
         self.rvr_groups = []
         self.prevailing_visibility = None
         self.rvr_min = None
+        self.trend_result: TrendResult | None = None
 
     def __iter__(self):
         for attr, value in self.__dict__.items():
@@ -185,6 +187,8 @@ class Observation:
             attributes["altimeter_inhg"] = altimeter_inches
         if self.rmk_tokens:
             attributes["rmk_tokens"] = list(self.rmk_tokens)
+        if self.trend_result:
+            attributes.update(self.trend_result.as_attributes())
         return attributes
 
 
@@ -207,6 +211,7 @@ class AnwsAoawseData:
         self.now = None
         self.forecast = None
         self.last_update = None
+        self.trend_result = None
         self.uri = BASE_URL
 
     async def async_update_site(self):
@@ -510,6 +515,18 @@ class AnwsAoawseData:
                 return
 
             forecast = self.get_observations_for_site(self._site, self.data)
+            if self.now is None:
+                trend_result = unknown_trend(self.language, observation.observation_time)
+            elif observation.observation_time == self.now.observation_time:
+                trend_result = self.trend_result or unknown_trend(
+                    self.language, observation.observation_time
+                )
+            else:
+                trend_result = compare_observations(
+                    self.now, observation, self.language
+                )
+            observation.trend_result = trend_result
+            self.trend_result = trend_result
             self.now = observation
             if forecast:
                 self.forecast = forecast

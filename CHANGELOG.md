@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0 (Observation trend preview)
+
+### Added
+
+- Compare consecutive valid local AOAWS observations and expose conservative
+  `unknown`, `stable`, `improving`, `deteriorating`, or `mixed` trend states.
+- Include trend score, reasons, confidence, summary, and observation time in
+  the existing weather entity attributes without changing card layouts.
+- Keep prevailing visibility and RVR comparisons separate so the lowest RVR
+  does not masquerade as a change in prevailing visibility.
+
 ## 1.0.18
 
 ### Changed
