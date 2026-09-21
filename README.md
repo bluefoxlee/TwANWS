@@ -43,6 +43,12 @@ Then restart Home Assistant.
 - Keeps the last valid observation during temporary API or overnight station outages and retries on the next five-minute poll.
 - Uses Home Assistant's native weather and sensor value/unit interfaces.
 
+## Versioning and maintenance
+
+This repository is an independently maintained fork of the original TwANWS project. Version numbers and release tags in this fork are maintained independently from upstream, while the original project remains credited above. Release-specific changes are documented in [CHANGELOG.md](CHANGELOG.md).
+
+Version 1.0.16 includes a Code Book audit covering ICAO/WMO Table 4678 present-weather combinations, wind limits, RVR formats, AUTO cloud groups, and Taiwan RMK pressure data.
+
 See [CHANGELOG.md](CHANGELOG.md) for release details.
 
 Buy Me A Coffee

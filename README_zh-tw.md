@@ -42,6 +42,12 @@
 - API 或機場夜間暫停資料時保留最後有效觀測，下次五分鐘輪詢會自動重試。
 - 改用 Home Assistant 的 `native_*` weather / sensor 數值與單位介面。
 
+# 版本與維護說明
+
+本專案是從原始 TwANWS 專案 fork 出來、獨立維護的分支。版本號與 release tag 由本分支自行管理，與原作者版本獨立；同時保留並註明原作者的貢獻。各版本的詳細變更記錄請見 [CHANGELOG.md](CHANGELOG.md)。
+
+1.0.16 已依航空氣象電碼彙編進行 Code Book 稽核，涵蓋 ICAO/WMO 表 4678 天氣組合、風速限制、RVR 格式、AUTO 雲組，以及台灣 RMK 氣壓資料。
+
 完整版本說明請見 [CHANGELOG.md](CHANGELOG.md)。
 
 
