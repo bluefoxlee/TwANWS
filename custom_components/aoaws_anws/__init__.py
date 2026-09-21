@@ -101,5 +101,5 @@ def device_info(config_entry: ConfigEntry) -> DeviceInfo:
         identifiers={(DOMAIN, config_entry.entry_id)},
         manufacturer="Taiwan ANWS",
         name=config_entry.title,
-        configuration_url="https://aoaws.anws.gov.tw/AWS",
+        configuration_url="https://aoaws.anws.gov.tw/",
     )

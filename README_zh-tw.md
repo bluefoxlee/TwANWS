@@ -1,6 +1,6 @@
 <a href="https://www.buymeacoffee.com/tsunglung" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="30" width="120"></a>
 
-航空氣象服務網 觀測資料 [TwANWS](https://aoaws.anws.gov.tw/AWS/index.php) 支援 Home Assistant
+航空氣象服務網 觀測資料 [TwANWS](https://aoaws.anws.gov.tw/) 支援 Home Assistant
 
 
 這個整合是基於 MetOffice 所做的開發。
