@@ -1,25 +1,22 @@
 """Support for Taiwan ANWS service."""
 from homeassistant.components.weather import (
-    ATTR_FORECAST_CLOUD_COVERAGE,
     ATTR_FORECAST_CONDITION,
-    ATTR_FORECAST_HUMIDITY,
-    ATTR_FORECAST_NATIVE_APPARENT_TEMP,
-    ATTR_FORECAST_NATIVE_PRECIPITATION,
     ATTR_FORECAST_NATIVE_TEMP,
-    ATTR_FORECAST_NATIVE_TEMP_LOW,
-    ATTR_FORECAST_NATIVE_WIND_GUST_SPEED,
     ATTR_FORECAST_NATIVE_WIND_SPEED,
-    ATTR_FORECAST_PRECIPITATION_PROBABILITY,
     ATTR_FORECAST_TIME,
-    ATTR_FORECAST_UV_INDEX,
     ATTR_FORECAST_WIND_BEARING,
     Forecast,
     SingleCoordinatorWeatherEntity,
-    WeatherEntityFeature
+    WeatherEntityFeature,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.const import UnitOfTemperature, UnitOfSpeed
+from homeassistant.const import (
+    UnitOfLength,
+    UnitOfPressure,
+    UnitOfSpeed,
+    UnitOfTemperature,
+)
 
 from . import device_info
 from .const import (
@@ -27,6 +24,9 @@ from .const import (
     CONDITION_CLASSES,
     DEFAULT_NAME,
     DOMAIN,
+    ATTR_LAST_UPDATE,
+    ATTR_OBSERVATION_TIME,
+    ATTR_WEATHER_TEXT,
     ANWS_AOAWS_COORDINATOR,
     ANWS_AOAWS_DATA,
     ANWS_AOAWS_NAME,
@@ -83,9 +83,17 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
     @property
     def condition(self):
         """Return the current condition."""
-        for k, v in CONDITION_CLASSES.items():
-            if self.anws_aoaws_now.weather.value.lower().strip() in v:
-                return k
+        if not self.anws_aoaws_now or not self.anws_aoaws_now.weather:
+            return None
+        return self._condition_for(self.anws_aoaws_now.weather.value)
+
+    @staticmethod
+    def _condition_for(value):
+        """Map an ANWS weather description to a Home Assistant condition."""
+        normalized = str(value).lower().strip()
+        for condition, descriptions in CONDITION_CLASSES.items():
+            if normalized in descriptions:
+                return condition
         return None
 
     @property
@@ -116,6 +124,13 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
         )
 
     @property
+    def native_temperature_unit(self) -> str:
+        """Return the native temperature unit."""
+        if self.anws_aoaws_now and self.anws_aoaws_now.temperature:
+            return self.anws_aoaws_now.temperature.units
+        return UnitOfTemperature.CELSIUS
+
+    @property
     def native_pressure(self) -> float | None:
         """Return the pressure."""
         return (
@@ -123,6 +138,11 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
             if self.anws_aoaws_now and self.anws_aoaws_now.pressure
             else None
         )
+
+    @property
+    def native_pressure_unit(self) -> str:
+        """Return the native pressure unit."""
+        return UnitOfPressure.HPA
 
     @property
     def humidity(self) -> float | None:
@@ -146,8 +166,8 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
     def native_wind_gust_speed(self) -> float | None:
         """Return the wind gust speed."""
         return (
-            self.anws_aoaws_now.wind_speed.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.wind_speed
+            self.anws_aoaws_now.wind_gust.value
+            if self.anws_aoaws_now and self.anws_aoaws_now.wind_gust
             else None
         )
 
@@ -159,6 +179,27 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
             if self.anws_aoaws_now and self.anws_aoaws_now.wind_speed
             else None
         )
+
+    @property
+    def native_wind_speed_unit(self) -> str:
+        """Return the native wind speed unit."""
+        if self.anws_aoaws_now and self.anws_aoaws_now.wind_speed:
+            return self.anws_aoaws_now.wind_speed.units
+        return UnitOfSpeed.KILOMETERS_PER_HOUR
+
+    @property
+    def native_visibility(self) -> float | None:
+        """Return visibility in the native unit."""
+        return (
+            self.anws_aoaws_now.visibility.value
+            if self.anws_aoaws_now and self.anws_aoaws_now.visibility
+            else None
+        )
+
+    @property
+    def native_visibility_unit(self) -> str:
+        """Return the native visibility unit."""
+        return UnitOfLength.KILOMETERS
 
     @property
     def wind_bearing(self) -> float | str | None:
@@ -174,6 +215,22 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
         """Return the attribution."""
         return ATTRIBUTION
 
+    @property
+    def extra_state_attributes(self):
+        """Return localized weather text without changing the HA condition."""
+        attributes = {
+            ATTR_LAST_UPDATE: self._data.last_update,
+            ATTR_OBSERVATION_TIME: (
+                self.anws_aoaws_now.observation_time
+                if self.anws_aoaws_now
+                else None
+            ),
+        }
+        if self.anws_aoaws_now and self.anws_aoaws_now.weather:
+            attributes[ATTR_WEATHER_TEXT] = self.anws_aoaws_now.weather.text
+            attributes.update(self.anws_aoaws_now.report_attributes())
+        return attributes
+
     async def async_added_to_hass(self) -> None:
         """Set up a listener and load data."""
         self.async_on_remove(
@@ -186,39 +243,6 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
         """Load data from integration."""
         self.anws_aoaws_now = self._data.now
         self.anws_aoaws_forecast = self._data.forecast
-        self._attr_temperature_unit = self.anws_aoaws_now.temperature.units if self.anws_aoaws_now.temperature else UnitOfTemperature.CELSIUS
-        self._attr_wind_speed_unit = self.anws_aoaws_now.wind_speed.units if self.anws_aoaws_now.wind_speed else UnitOfSpeed.KILOMETERS_PER_HOUR
-        self._attr_temperature = (
-            self.anws_aoaws_now.temperature.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.temperature
-            else None
-        )
-        self._attr_pressure = (
-            self.anws_aoaws_now.pressure.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.pressure
-            else None
-        )
-        self._attr_wind_speed = (
-            self.anws_aoaws_now.wind_speed.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.wind_speed
-            else None
-        )
-        self._attr_visibility =  (
-            self.anws_aoaws_now.visibility.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.visibility
-            else None
-        )
-        self._attr_humidity = (
-            self.anws_aoaws_now.humidity.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.humidity
-            else None
-        )
-        self._attr_wind_bearing =  (
-            self.anws_aoaws_now.wind_direction.value
-            if self.anws_aoaws_now and self.anws_aoaws_now.wind_direction
-            else None
-        )
-
         self.async_write_ha_state()
 
     @property
@@ -243,7 +267,7 @@ class AnwsAoawsWeather(SingleCoordinatorWeatherEntity):
                         ATTR_FORECAST_TIME: item.date,
                         ATTR_FORECAST_NATIVE_TEMP: item.temperature.value,
                         ATTR_FORECAST_NATIVE_WIND_SPEED: item.wind_speed.value,
-                        ATTR_FORECAST_CONDITION: item.weather.value,
+                        ATTR_FORECAST_CONDITION: self._condition_for(item.weather.value),
                         ATTR_FORECAST_WIND_BEARING: item.wind_direction.value
                     }
                 )
