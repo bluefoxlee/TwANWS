@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.1 (Rolling observation trend)
+
+### Changed
+
+- Build local weather trends from a continuous three-hour observation window
+  rather than only the previous observation.
+- Wait for three valid observations before classifying a trend, reset the
+  window after a 90-minute reporting gap, and expose the window start, length,
+  and observation count in entity attributes.
+
 ## 1.1.0 (Observation trend preview)
 
 ### Added

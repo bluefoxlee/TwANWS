@@ -67,6 +67,49 @@ class TrendTests(unittest.TestCase):
         self.assertIn("thunderstorm_present", result.reasons)
         self.assertEqual(result.confidence, "high")
 
+    def test_three_observations_produce_a_three_hour_window_trend(self):
+        first = _observation(
+            visibility=10.0,
+            observation_time="2026-09-21T09:00:00+08:00",
+        )
+        middle = _observation(
+            visibility=8.0,
+            observation_time="2026-09-21T10:00:00+08:00",
+        )
+        current = _observation(
+            visibility=4.0,
+            weather_codes=("+TSRA",),
+            observation_time="2026-09-21T11:00:00+08:00",
+        )
+
+        result = TREND.analyze_observation_history([first, middle, current], "tw")
+
+        self.assertEqual(result.state, "deteriorating")
+        self.assertEqual(result.since, first.observation_time)
+        self.assertEqual(result.observation_count, 3)
+        self.assertEqual(result.window_minutes, 120)
+
+    def test_two_observations_wait_for_a_third(self):
+        first = _observation(observation_time="2026-09-21T09:00:00+08:00")
+        current = _observation(
+            visibility=4.0,
+            observation_time="2026-09-21T10:00:00+08:00",
+        )
+
+        result = TREND.analyze_observation_history([first, current], "tw")
+
+        self.assertEqual(result.state, "unknown")
+        self.assertEqual(result.observation_count, 2)
+        self.assertEqual(result.window_minutes, 60)
+
+    def test_long_gap_starts_a_new_history_window(self):
+        first = _observation(observation_time="2026-09-21T09:00:00+08:00")
+        current = _observation(observation_time="2026-09-21T11:00:00+08:00")
+
+        history = TREND.append_observation_history([first], current)
+
+        self.assertEqual(history, [current])
+
     def test_visibility_recovery_and_thunderstorm_end_are_improving(self):
         previous = _observation(visibility=4.0, weather_codes=("+TSRA",))
         current = _observation(

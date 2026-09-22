@@ -1,8 +1,9 @@
-"""Conservative trend detection for consecutive AOAWS observations."""
+"""Conservative rolling-window trend detection for AOAWS observations."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 
@@ -11,6 +12,10 @@ TREND_STABLE = "stable"
 TREND_IMPROVING = "improving"
 TREND_DETERIORATING = "deteriorating"
 TREND_MIXED = "mixed"
+
+TREND_WINDOW = timedelta(hours=3)
+TREND_MAX_GAP = timedelta(minutes=90)
+TREND_MIN_OBSERVATIONS = 3
 
 
 _REASON_LABELS = {
@@ -40,6 +45,8 @@ class TrendResult:
     summary: str
     confidence: str
     since: str | None = None
+    observation_count: int | None = None
+    window_minutes: int | None = None
 
     def as_attributes(self) -> dict[str, Any]:
         """Return attributes suitable for Home Assistant state data."""
@@ -52,10 +59,19 @@ class TrendResult:
         }
         if self.since:
             attributes["trend_since"] = self.since
+        if self.observation_count is not None:
+            attributes["trend_observation_count"] = self.observation_count
+        if self.window_minutes is not None:
+            attributes["trend_window_minutes"] = self.window_minutes
         return attributes
 
 
-def unknown_trend(language: str = "tw", since: str | None = None) -> TrendResult:
+def unknown_trend(
+    language: str = "tw",
+    since: str | None = None,
+    observation_count: int | None = None,
+    window_minutes: int | None = None,
+) -> TrendResult:
     """Return a result for the first observation or incomplete history."""
     return TrendResult(
         state=TREND_UNKNOWN,
@@ -64,6 +80,66 @@ def unknown_trend(language: str = "tw", since: str | None = None) -> TrendResult
         summary=_summary(TREND_UNKNOWN, ("insufficient_history",), language),
         confidence="low",
         since=since,
+        observation_count=observation_count,
+        window_minutes=window_minutes,
+    )
+
+
+def append_observation_history(history: list[Any], observation: Any) -> list[Any]:
+    """Keep a continuous three-hour observation window.
+
+    A long reporting gap starts a new window so an evening METAR is never
+    compared with the next morning's first report.
+    """
+    current_time = _observation_datetime(observation)
+    if current_time is None:
+        return [observation]
+
+    ordered_history = _ordered_observations(history)
+    if ordered_history:
+        previous_time = _observation_datetime(ordered_history[-1])
+        if (
+            previous_time is None
+            or current_time <= previous_time
+            or current_time - previous_time > TREND_MAX_GAP
+        ):
+            return [observation]
+
+    cutoff = current_time - TREND_WINDOW
+    return [
+        item
+        for item in ordered_history
+        if (item_time := _observation_datetime(item)) is not None and item_time >= cutoff
+    ] + [observation]
+
+
+def analyze_observation_history(
+    history: list[Any], language: str = "tw"
+) -> TrendResult:
+    """Describe the net change across a continuous three-hour window."""
+    observations = _ordered_observations(history)
+    if not observations:
+        return unknown_trend(language)
+
+    first = observations[0]
+    current = observations[-1]
+    start_time = _observation_time(first)
+    duration = _window_minutes(first, current)
+    count = len(observations)
+    if count < TREND_MIN_OBSERVATIONS:
+        return unknown_trend(
+            language,
+            since=start_time,
+            observation_count=count,
+            window_minutes=duration,
+        )
+
+    result = compare_observations(first, current, language)
+    return replace(
+        result,
+        since=start_time,
+        observation_count=count,
+        window_minutes=duration,
     )
 
 
@@ -171,6 +247,37 @@ def _element_value(observation: Any, name: str) -> float | None:
 
 def _observation_time(observation: Any) -> str | None:
     return getattr(observation, "observation_time", None) if observation else None
+
+
+def _observation_datetime(observation: Any) -> datetime | None:
+    value = _observation_time(observation)
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _ordered_observations(history: list[Any]) -> list[Any]:
+    """Order valid observations and keep the last copy of each timestamp."""
+    deduplicated: dict[datetime, Any] = {}
+    for observation in history:
+        timestamp = _observation_datetime(observation)
+        if timestamp is not None:
+            deduplicated[timestamp] = observation
+    return [deduplicated[timestamp] for timestamp in sorted(deduplicated)]
+
+
+def _window_minutes(first: Any, current: Any) -> int | None:
+    first_time = _observation_datetime(first)
+    current_time = _observation_datetime(current)
+    if first_time is None or current_time is None:
+        return None
+    return max(0, int((current_time - first_time).total_seconds() // 60))
 
 
 def _visibility_bucket(value: float | None) -> int | None:
