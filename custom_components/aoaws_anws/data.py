@@ -32,7 +32,12 @@ from .metar import (
     parse_wind,
 )
 from .localization import localized_weather_text
-from .trend import TrendResult, compare_observations, unknown_trend
+from .trend import (
+    TrendResult,
+    analyze_observation_history,
+    append_observation_history,
+    unknown_trend,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -212,6 +217,7 @@ class AnwsAoawseData:
         self.forecast = None
         self.last_update = None
         self.trend_result = None
+        self.trend_history = []
         self.uri = BASE_URL
 
     async def async_update_site(self):
@@ -515,15 +521,16 @@ class AnwsAoawseData:
                 return
 
             forecast = self.get_observations_for_site(self._site, self.data)
-            if self.now is None:
-                trend_result = unknown_trend(self.language, observation.observation_time)
-            elif observation.observation_time == self.now.observation_time:
+            if self.now and observation.observation_time == self.now.observation_time:
                 trend_result = self.trend_result or unknown_trend(
                     self.language, observation.observation_time
                 )
             else:
-                trend_result = compare_observations(
-                    self.now, observation, self.language
+                self.trend_history = append_observation_history(
+                    self.trend_history, observation
+                )
+                trend_result = analyze_observation_history(
+                    self.trend_history, self.language
                 )
             observation.trend_result = trend_result
             self.trend_result = trend_result

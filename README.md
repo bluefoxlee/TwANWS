@@ -40,7 +40,9 @@ Then restart Home Assistant.
 - Localizes visibility labels and weather text according to the integration language while preserving standard Home Assistant condition values.
 - Exposes separate integration update and station observation timestamps to distinguish a stale airport report from a failed HA update.
 - Exposes JSON-safe report header, raw METAR, RVR, wind, visibility, cloud-layer, and trend attributes for future cards.
-- Exposes a conservative local-observation trend preview with reasons and confidence; it is not an operational flight forecast.
+- Exposes a conservative rolling three-hour local-observation trend preview with
+  reasons, confidence, and the observation-window details; it is not an
+  operational flight forecast.
 - Keeps the last valid observation during temporary API or overnight station outages and retries on the next five-minute poll.
 - Uses Home Assistant's native weather and sensor value/unit interfaces.
 

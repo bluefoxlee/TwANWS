@@ -173,7 +173,7 @@ class DataConversionTests(unittest.TestCase):
             "unknown",
         )
 
-    def test_successive_refreshes_expose_deteriorating_trend(self):
+    def test_three_successive_refreshes_expose_deteriorating_window_trend(self):
         self.client._update_site = lambda: True
         self.client.data = [[
             _record(
@@ -195,10 +195,29 @@ class DataConversionTests(unittest.TestCase):
         ]]
         self.client._update()
 
+        self.assertEqual(
+            self.client.now.report_attributes()["trend_state"],
+            "unknown",
+        )
+
+        self.client.data = [[
+            _record(
+                datatime="2026-04-13T01:56:00Z",
+                REPORT=(
+                    "SPECI RCBS 130156Z 19006KT 5000 "
+                    "+TSRA 25/24 Q1011="
+                ),
+                VIS=5000,
+            )
+        ]]
+        self.client._update()
+
         attributes = self.client.now.report_attributes()
         self.assertEqual(attributes["trend_state"], "deteriorating")
         self.assertIn("visibility_decreasing", attributes["trend_reasons"])
         self.assertIn("thunderstorm_present", attributes["trend_reasons"])
+        self.assertEqual(attributes["trend_observation_count"], 3)
+        self.assertEqual(attributes["trend_window_minutes"], 10)
 
     def test_observation_keeps_raw_report_and_trends(self):
         report = (
