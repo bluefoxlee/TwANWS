@@ -54,6 +54,17 @@ Version 1.0.16 includes a Code Book audit covering ICAO/WMO Table 4678 present-w
 
 AOAWS is operated by Air Navigation and Weather Services, CAA, MOTC (ANWS).
 
+### Brand assets
+
+The integration brand files are based on the current official AOAWS website assets:
+
+- `custom_components/aoaws_anws/brand/aoaws-logo.svg` — official AOAWS header artwork
+- `custom_components/aoaws_anws/brand/aoaws-favicon.svg` — official AOAWS website icon
+- `logo.png` and `icon.png` are 512-pixel PNG renderings for Home Assistant compatibility.
+
+Source URLs: [AOAWS logo](https://aoaws.anws.gov.tw/images/logo.svg) and [AOAWS favicon](https://aoaws.anws.gov.tw/ico_bule_gradient_60.svg?v=1.0).
+These marks identify ANWS/AOAWS and do not imply official endorsement of this custom integration.
+
 See [CHANGELOG.md](CHANGELOG.md) for release details.
 
 Buy Me A Coffee
